@@ -1,0 +1,52 @@
+services:
+  frontend:
+    container_name: gestucook_frontend
+    image: nginx:alpine
+    ports:
+      - "3080:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  backend:
+    container_name: gestucook_backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3081:8000"
+    environment:
+      - LLM_PROVIDER=${LLM_PROVIDER:-openrouter}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-5.4-nano}
+      - OPENROUTER_MODEL=${OPENROUTER_MODEL:-google/gemma-4-31b-it:free}
+      - ASR_URL=http://asr-service:8001
+      - TTS_URL=http://tts-service:8002
+    depends_on:
+      - asr-service
+      - tts-service
+    restart: unless-stopped
+
+  asr-service:
+    container_name: gestucook_asr
+    build:
+      context: ./asr_service
+      dockerfile: Dockerfile
+    ports:
+      - "3082:8001"
+    environment:
+      - ASR_MODEL=${ASR_MODEL:-tiny}
+    restart: unless-stopped
+
+  tts-service:
+    container_name: gestucook_tts
+    build:
+      context: ./tts_service
+      dockerfile: Dockerfile
+    ports:
+      - "3083:8002"
+    restart: unless-stopped

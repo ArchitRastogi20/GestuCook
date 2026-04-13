@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GestuCook</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<!-- ambient bg -->
+<div class="bg-grain"></div>
+<div class="bg-orb bg-orb-1"></div>
+<div class="bg-orb bg-orb-2"></div>
+
+<div class="app-wrapper">
+
+    <!-- header -->
+    <header>
+        <div class="logo">Gestu<span>Cook</span></div>
+        <div class="header-meta">
+            <div class="provider-badge" id="provider-badge">loading...</div>
+            <div class="cost-counter" id="cost-display"><b>$0.0000</b> | 0 in / 0 out</div>
+        </div>
+    </header>
+
+    <main>
+
+        <!-- 1. Welcome -->
+        <div class="screen active" id="screen-welcome">
+            <div class="welcome-card">
+                <h1>GestuCook</h1>
+                <p>
+                    Cook hands-free. Upload a photo of your ingredients or tell us what you have
+                    &mdash; then navigate recipes with gestures and voice.
+                </p>
+                <input type="text" class="input-field" id="input-name"
+                       placeholder="Enter your name" autocomplete="off">
+                <br><br>
+                <button class="btn btn-primary" id="btn-enter">Get Started</button>
+            </div>
+        </div>
+
+        <!-- 2. Choose mode -->
+        <div class="screen" id="screen-mode">
+            <h2 class="section-title">How do you want to start?</h2>
+            <p class="section-sub">Pick a mode to get your recipes</p>
+            <div class="mode-grid">
+                <div class="mode-card" id="mode-photo">
+                    <span class="icon">&#128247;</span>
+                    <h3>Photo Mode</h3>
+                    <p>Upload pictures of your ingredients and let AI detect them</p>
+                </div>
+                <div class="mode-card" id="mode-handsfree">
+                    <span class="icon">&#127908;</span>
+                    <h3>Hands-Free</h3>
+                    <p>Tell us what ingredients you have using your voice</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. Photo upload -->
+        <div class="screen" id="screen-photo">
+            <h2 class="section-title">Upload Your Ingredients</h2>
+            <p class="section-sub">Take photos of fruits, vegetables, or any food items</p>
+
+            <div class="upload-zone" id="upload-zone">
+                <span class="icon">&#128194;</span>
+                <p>Click or drag images here</p>
+            </div>
+            <input type="file" id="file-input" accept=".jpg,.jpeg,.png" multiple
+                   style="display:none">
+            <div class="thumb-strip" id="thumb-strip"></div>
+
+            <p class="section-sub">Choose cuisine (optional)</p>
+            <div class="chip-group">
+                <button class="chip" data-cuisine="Italian">Italian</button>
+                <button class="chip" data-cuisine="Indian">Indian</button>
+                <button class="chip" data-cuisine="Chinese">Chinese</button>
+                <button class="chip" data-cuisine="American">American</button>
+                <button class="chip" data-cuisine="Turkish">Turkish</button>
+                <button class="chip" data-cuisine="Any">Any</button>
+            </div>
+
+            <div style="text-align:center;">
+                <button class="btn btn-primary" id="btn-detect" disabled>
+                    Detect &amp; Get Recipes
+                </button>
+                <button class="btn btn-ghost" onclick="document.querySelector('#screen-mode').classList.add('active');document.querySelector('#screen-photo').classList.remove('active');">
+                    Back
+                </button>
+            </div>
+        </div>
+
+        <!-- 4. Hands-free -->
+        <div class="screen" id="screen-handsfree">
+            <h2 class="section-title">Tell Us Your Ingredients</h2>
+            <p class="section-sub">Press the microphone and say what you have</p>
+
+            <div class="voice-area">
+                <button class="mic-btn" id="mic-btn">&#127908;</button>
+                <div class="voice-transcript" id="voice-transcript">
+                    Press the mic to start speaking...
+                </div>
+                <div class="ingredients-list" id="ingredients-list"></div>
+            </div>
+
+            <div style="text-align:center; margin-top:1rem;">
+                <button class="btn btn-primary" id="btn-handsfree-go" disabled>
+                    Generate Recipes
+                </button>
+                <button class="btn btn-ghost" onclick="document.querySelector('#screen-mode').classList.add('active');document.querySelector('#screen-handsfree').classList.remove('active');">
+                    Back
+                </button>
+            </div>
+        </div>
+
+        <!-- 5. Recipe carousel -->
+        <div class="screen" id="screen-recipes">
+            <h2 class="section-title">Your Recipes</h2>
+            <div class="section-sub">Detected: <span id="detected-items-display"></span></div>
+
+            <div class="carousel-wrapper">
+                <div class="carousel-track" id="carousel-track"></div>
+            </div>
+
+            <div class="carousel-nav">
+                <button class="carousel-arrow" id="carousel-prev">&#8249;</button>
+                <div class="carousel-dots" id="carousel-dots"></div>
+                <button class="carousel-arrow" id="carousel-next">&#8250;</button>
+            </div>
+
+            <div class="gesture-legend">
+                <h4>Gesture Controls</h4>
+                <div class="gesture-legend-grid">
+                    <div class="gesture-legend-item">
+                        <span class="sym">&#9995;</span> Swipe Right = Next
+                    </div>
+                    <div class="gesture-legend-item">
+                        <span class="sym">&#9995;</span> Swipe Left = Previous
+                    </div>
+                    <div class="gesture-legend-item">
+                        <span class="sym">&#128077;</span> Thumbs Up = Select
+                    </div>
+                    <div class="gesture-legend-item">
+                        <span class="sym">&#9994;</span> Fist = Go Back
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 6. Cooking mode -->
+        <div class="screen" id="screen-cooking">
+            <div class="cooking-header">
+                <h2 id="cooking-recipe-name"></h2>
+                <div class="step-progress" id="step-progress"></div>
+            </div>
+
+            <div class="cooking-step-card">
+                <div class="cooking-step-num" id="cooking-step-num"></div>
+                <div class="cooking-step-text" id="cooking-step-text"></div>
+            </div>
+
+            <div class="cooking-controls">
+                <button class="btn btn-outline" id="btn-prev-step">Previous</button>
+                <button class="btn btn-primary" id="btn-read-step">Read Aloud</button>
+                <button class="btn btn-outline" id="btn-next-step">Next</button>
+                <button class="btn btn-ghost" id="btn-exit-cooking">Exit</button>
+            </div>
+
+            <div class="gesture-legend">
+                <h4>Cooking Gesture Controls</h4>
+                <div class="gesture-legend-grid">
+                    <div class="gesture-legend-item">
+                        <span class="sym">&#9995;</span> Swipe = Navigate Steps
+                    </div>
+                    <div class="gesture-legend-item">
+                        <span class="sym">&#9995;</span> Open Palm = Read Aloud
+                    </div>
+                    <div class="gesture-legend-item">
+                        <span class="sym">&#128077;</span> Thumbs Up = Next Step
+                    </div>
+                    <div class="gesture-legend-item">
+                        <span class="sym">&#9994;</span> Fist = Exit Cooking
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+</div>
+
+<!-- Loader overlay -->
+<div class="loader-overlay" id="loader">
+    <div class="spinner"></div>
+    <p id="loader-text">Loading...</p>
+</div>
+
+<!-- Gesture feedback popup -->
+<div class="gesture-feedback" id="gesture-feedback"></div>
+
+<!-- Webcam PIP -->
+<div class="webcam-pip hidden" id="webcam-pip">
+    <video id="webcam-video" playsinline></video>
+    <canvas id="webcam-canvas" width="320" height="240"></canvas>
+</div>
+
+<!-- Gesture HUD -->
+<div class="gesture-hud hidden" id="gesture-hud">
+    <div class="gesture-indicator">
+        <div class="dot" id="gesture-dot"></div>
+        <span>Gesture</span>
+    </div>
+    <span id="gesture-label">waiting...</span>
+</div>
+
+<!-- MediaPipe scripts -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+<!-- App scripts -->
+<script src="/static/js/gestures.js"></script>
+<script src="/static/js/app.js"></script>
+
+</body>
+</html>

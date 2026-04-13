@@ -119,7 +119,7 @@ Cooking mode: step-by-step
 ## How to run
 
 1. Clone
-2. Make `.env` and add your API keys:
+2. Make `.env` and add your API keys (check .env.example):
    ```
    LLM_PROVIDER=openrouter
    OPENROUTER_API_KEY=sk-or-v1-your-key-here

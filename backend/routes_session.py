@@ -99,24 +99,46 @@ async def end(body: EndIn):
 
 @router.get("/history")
 async def history(name: str, limit: int = 10):
-    cur = cooking_sessions.find({"user_name": name}).sort("started_at", -1).limit(min(limit, 50))
-    sessions = []
-    async for s in cur:
-        s["_id"] = str(s["_id"])
-        sessions.append(s)
-    total_usd = 0.0
-    count = 0
-    async for s in cooking_sessions.find({"user_name": name}, {"total_cost_usd": 1, "started_at": 1}):
-        total_usd += s.get("total_cost_usd", 0.0)
-        count += 1
-    # month count
     from datetime import timedelta
     cutoff = _now() - timedelta(days=30)
-    month_count = await cooking_sessions.count_documents({"user_name": name, "started_at": {"$gte": cutoff}})
-    return {"sessions": sessions, "totals": {
-        "lifetime_cost_usd": round(total_usd, 4),
-        "count": count, "month_count": month_count,
-    }}
+    pipeline = [
+        {"$match": {"user_name": name}},
+        {"$facet": {
+            "page": [
+                {"$sort": {"started_at": -1}},
+                {"$limit": min(limit, 50)},
+            ],
+            "totals": [
+                {"$group": {
+                    "_id": None,
+                    "lifetime_cost_usd": {"$sum": {"$ifNull": ["$total_cost_usd", 0]}},
+                    "count": {"$sum": 1},
+                }},
+            ],
+            "month": [
+                {"$match": {"started_at": {"$gte": cutoff}}},
+                {"$count": "n"},
+            ],
+        }},
+    ]
+    cur = cooking_sessions.aggregate(pipeline)
+    result = None
+    async for doc in cur:
+        result = doc
+        break
+    page = (result or {}).get("page", [])
+    for s in page:
+        s["_id"] = str(s["_id"])
+    totals_doc = ((result or {}).get("totals") or [{}])[0]
+    month_doc = ((result or {}).get("month") or [{}])[0]
+    return {
+        "sessions": page,
+        "totals": {
+            "lifetime_cost_usd": round(totals_doc.get("lifetime_cost_usd", 0.0), 4),
+            "count": totals_doc.get("count", 0),
+            "month_count": month_doc.get("n", 0),
+        },
+    }
 
 class PrefsIn(BaseModel):
     name: str

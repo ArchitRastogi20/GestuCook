@@ -96,3 +96,45 @@ main { flex: 1; padding: var(--space-5); max-width: 1120px; margin: 0 auto; widt
 .epilogue-sheet .frame { aspect-ratio: 4/3; border-radius: var(--r-sm); overflow: hidden; border: 1px solid var(--hairline); background: var(--shell); }
 .epilogue-sheet .frame img { width: 100%; height: 100%; object-fit: cover; }
 .epilogue-sheet .frame .caption { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); padding: 6px 8px; }
+
+/* ambient cooking -- kitchen-distance reading */
+.ambient {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  padding: var(--space-6);
+  z-index: 70;
+}
+.ambient .step {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+  font-weight: 400;
+  font-size: clamp(64px, 8vw, 112px);
+  line-height: 0.98;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+  text-align: center;
+  max-width: 18ch;
+}
+.ambient .meta { margin-top: var(--space-5); color: var(--ink-3); font-family: var(--font-mono); font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; }
+
+/* trainer */
+.trainer-wrap { max-width: 800px; margin: var(--space-6) auto; }
+.trainer-stage { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); align-items: center; }
+.trainer-prompt h2 { font-family: var(--font-display); font-variation-settings: "opsz" 144, "SOFT" 100; font-weight: 400; font-size: 44px; line-height: 1.0; letter-spacing: -0.022em; }
+.trainer-prompt p { margin-top: var(--space-3); color: var(--ink-2); }
+.trainer-conf { margin-top: var(--space-5); height: 6px; background: var(--bg-2); border-radius: 3px; overflow: hidden; }
+.trainer-conf > div { height: 100%; background: var(--copper); transition: width 200ms var(--t-quart); }
+.trainer-pip { aspect-ratio: 4/3; background: oklch(0.20 0.015 60); border-radius: var(--r-inner); overflow: hidden; position: relative; }
+.trainer-pip video, .trainer-pip canvas { position: absolute; inset: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+@media (max-width: 900px) { .trainer-stage { grid-template-columns: 1fr; } }
+
+/* parallel cooking */
+.parallel-stage { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); margin-top: var(--space-5); }
+.parallel-lane h3 { font-family: var(--font-display); font-variation-settings: "opsz" 96, "SOFT" 80; font-weight: 400; font-size: 24px; letter-spacing: -0.018em; margin-bottom: var(--space-3); }
+.parallel-lane .step { font-size: 18px; line-height: 1.5; color: var(--ink-2); }
+.parallel-lane.active { color: var(--ink); }
+.parallel-lane.active .step { color: var(--ink); }
+.parallel-lane:not(.active) { opacity: 0.55; }
+@media (max-width: 900px) { .parallel-stage { grid-template-columns: 1fr; } }

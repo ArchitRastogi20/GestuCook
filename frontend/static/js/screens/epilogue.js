@@ -68,7 +68,7 @@ export async function mount(root) {
   const cta = document.createElement("div");
   cta.style.cssText = "display:flex; gap: var(--space-3); justify-content:center; margin-top: var(--space-6);";
   cta.append(
-    Button({ label: "Cook another", trailingIcon: "arrowRight", onClick: () => { state.cost = { usd: 0, in: 0, out: 0 }; state.go("mode"); } }),
+    Button({ label: "Cook another", trailingIcon: "arrowRight", onClick: () => { state.resetCost(); state.go("mode"); } }),
   );
 
   const wrap = document.createElement("div");

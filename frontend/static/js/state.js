@@ -61,6 +61,11 @@ export class State {
     this.emit("cost", this.cost);
   }
 
+  resetCost() {
+    this.cost = { usd: 0, in: 0, out: 0 };
+    this.emit("cost", this.cost);
+  }
+
   on(event, fn) {
     if (!this._listeners.has(event)) this._listeners.set(event, []);
     this._listeners.get(event).push(fn);

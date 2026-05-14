@@ -1,0 +1,214 @@
+@import url('tokens.css');
+
+/* -- Bezel ────────────────────────────────────────────────────────── */
+.bezel {
+  background: var(--shell);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-outer);
+  padding: var(--space-2);
+  box-shadow: var(--shadow-amb);
+  transition: transform var(--t-spring), box-shadow var(--t-spring);
+}
+.bezel.lift:hover { transform: translateY(-2px); }
+.bezel > .core {
+  background: var(--paper);
+  border-radius: var(--r-inner);
+  box-shadow: var(--inset-hi);
+  padding: var(--space-6) var(--space-6) var(--space-5);
+  height: 100%;
+}
+.bezel.sm > .core { padding: var(--space-4) var(--space-5); }
+
+/* -- Capsule (top-bar & HUD island) ───────────────────────────────── */
+.capsule {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: 7px var(--space-2) 7px var(--space-5);
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-soft), var(--inset-hi);
+}
+.capsule--top { margin: var(--space-7) auto var(--space-7); width: max-content; }
+.capsule--hud {
+  position: fixed;
+  left: 50%; bottom: 28px;
+  transform: translateX(-50%);
+  z-index: 60;
+}
+.capsule .sep { width: 1px; height: 18px; background: var(--hairline); }
+
+/* -- Button ───────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-5);
+  background: var(--ink);
+  color: var(--paper);
+  border-radius: var(--r-pill);
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  border: none;
+  cursor: pointer;
+  transition: transform var(--t-spring), box-shadow var(--t-spring);
+  box-shadow: 0 6px 20px -8px rgba(40,28,10,0.5);
+}
+.btn:hover { transform: translateY(-1px); }
+.btn:active { transform: scale(0.98); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn .nest {
+  width: 32px; height: 32px; border-radius: var(--r-pill);
+  background: oklch(0.42 0.030 60);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: transform var(--t-spring);
+}
+.btn:hover .nest { transform: translate(2px, -1px) scale(1.05); }
+.btn .nest svg { width: 14px; height: 14px; stroke: var(--paper); fill: none; stroke-width: 1.4; }
+.btn--ghost {
+  background: transparent;
+  color: var(--ink-2);
+  border: 1px solid var(--hairline);
+  padding: 9px var(--space-5);
+  box-shadow: none;
+}
+.btn--ghost:hover { color: var(--ink); border-color: var(--ink-3); }
+
+/* -- Eyebrow ──────────────────────────────────────────────────────── */
+.eyebrow {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: 4px var(--space-3) 4px var(--space-2);
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  border: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--copper);
+}
+.eyebrow .dot {
+  width: 7px; height: 7px; border-radius: var(--r-pill);
+  background: var(--copper);
+  box-shadow: 0 0 0 4px oklch(0.60 0.115 52 / 0.18);
+}
+
+/* -- Chip ─────────────────────────────────────────────────────────── */
+.chip {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  padding: 4px var(--space-3);
+  border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  background: transparent;
+  display: inline-flex; align-items: center;
+}
+.chip--copper { color: var(--copper); border-color: oklch(0.60 0.115 52 / 0.35); }
+.chip--sage   { color: var(--sage);   border-color: oklch(0.66 0.046 142 / 0.40); }
+
+/* -- PipFrame (webcam) ────────────────────────────────────────────── */
+.pip {
+  padding: 6px;
+  background: var(--shell);
+  border: 1px solid var(--hairline);
+  border-radius: 18px;
+  box-shadow: var(--shadow-soft);
+  width: 220px;
+}
+.pip .frame {
+  border-radius: var(--r-sm);
+  background: oklch(0.20 0.015 60);
+  aspect-ratio: 4/3;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--inset-hi);
+}
+.pip .frame video,
+.pip .frame canvas {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  transform: scaleX(-1);
+}
+.pip .label {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: var(--space-2) var(--space-3) 2px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--ink-3);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.pip .label .live::before {
+  content: ""; display: inline-block;
+  width: 6px; height: 6px; border-radius: var(--r-pill);
+  background: var(--sage);
+  margin-right: 6px;
+  box-shadow: 0 0 0 3px oklch(0.66 0.046 142 / 0.25);
+  vertical-align: middle;
+}
+
+/* -- HUD island internals ─────────────────────────────────────────── */
+.hud .status {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.hud .status::before {
+  content: ""; width: 7px; height: 7px; border-radius: var(--r-pill);
+  background: var(--sage);
+  box-shadow: 0 0 0 4px oklch(0.66 0.046 142 / 0.22);
+}
+.hud .gest-pills { display: flex; gap: var(--space-2); }
+.hud .gp {
+  padding: 4px var(--space-3); border-radius: var(--r-pill);
+  border: 1px solid var(--hairline);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.hud .gp.on { color: var(--copper); border-color: oklch(0.60 0.115 52 / 0.40); }
+.hud .timer {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--sage);
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+}
+.hud .lock {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--copper);
+  padding: 4px var(--space-3);
+  border-radius: var(--r-pill);
+  border: 1px solid oklch(0.60 0.115 52 / 0.40);
+}
+
+/* -- Cascade (peek behind featured card) ──────────────────────────── */
+.cascade { display: flex; flex-direction: column; gap: var(--space-4); position: relative; }
+.cascade .peek {
+  padding: 6px;
+  border-radius: var(--r-inner);
+  background: var(--shell);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-soft);
+  transition: transform var(--t-spring);
+}
+.cascade .peek > .core-sm {
+  background: var(--paper);
+  border-radius: 17px;
+  padding: var(--space-4) var(--space-5);
+  box-shadow: var(--inset-hi);
+}
+.cascade .peek.next  { transform: rotate(1.2deg) translateX(8px); }
+.cascade .peek.prev  { transform: rotate(-1.4deg) translateX(-6px); opacity: 0.92; }

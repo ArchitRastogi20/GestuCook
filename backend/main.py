@@ -13,11 +13,14 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from typing import Optional
 from PIL import Image
+from db import ensure_indexes
+from routes_session import router as session_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gestucook")
 
 app = FastAPI(title="GestuCook API")
+app.include_router(session_router)
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -28,6 +31,11 @@ ASR_URL = os.getenv("ASR_URL", "http://asr-service:8001")
 TTS_URL = os.getenv("TTS_URL", "http://tts-service:8002")
 
 TOKENIZER = tiktoken.get_encoding("o200k_base")
+
+
+@app.on_event("startup")
+async def on_startup():
+    await ensure_indexes()
 
 
 @app.on_event("startup")

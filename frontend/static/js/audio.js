@@ -81,8 +81,14 @@ export class Timer {
   stop() { if (this._handle) { clearInterval(this._handle); this._handle = null; } }
 }
 
+let _ctx = null;
+function getAudioCtx() {
+  if (!_ctx) _ctx = new (window.AudioContext || window.webkitAudioContext)();
+  return _ctx;
+}
+
 function chime() {
-  const ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const ctx = getAudioCtx();
   const o = ctx.createOscillator();
   const g = ctx.createGain();
   o.type = "sine";

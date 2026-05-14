@@ -49,12 +49,15 @@ async def qa(body: QABody):
 
     if PROVIDER == "openai":
         url = "https://api.openai.com/v1/chat/completions"
-        key = os.environ["OPENAI_API_KEY"]
+        key = os.environ.get("OPENAI_API_KEY", "")
         model = os.environ.get("OPENAI_MODEL", "gpt-5.4-nano")
     else:
         url = "https://openrouter.ai/api/v1/chat/completions"
-        key = os.environ["OPENROUTER_API_KEY"]
+        key = os.environ.get("OPENROUTER_API_KEY", "")
         model = os.environ.get("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
+
+    if not key:
+        raise HTTPException(500, f"{PROVIDER} API key not configured")
 
     payload = {
         "model": model,

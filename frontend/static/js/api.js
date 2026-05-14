@@ -42,7 +42,6 @@ export const api = {
   },
   costSnapshot() { return jsonGet("/config"); },
 
-  // new session endpoints
   session: {
     start(name)                  { return jsonPost("/session/start", { name }); },
     event(session_id, kind, data){ return jsonPost("/session/event", { session_id, kind, data }); },
@@ -52,6 +51,5 @@ export const api = {
     trainerCompleted(name)       { return jsonPost("/session/trainer-completed", { name }); },
   },
 
-  // new Q&A endpoint (used by feature 3)
   qa(payload) { return jsonPost("/qa", payload); },
 };

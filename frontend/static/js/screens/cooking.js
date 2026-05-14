@@ -120,7 +120,6 @@ export async function mount(root) {
   await GestureEngine.init(videoEl, canvasEl, (g) => onGesture(g));
   GestureEngine.start();
 
-  // B5: stop any previous voice loop and start a fresh one for this mount
   if (voice) { voice.stop(); voice = null; }
   voice = new VoiceLoop({
     onCommand: (action) => {
@@ -164,7 +163,6 @@ export async function mount(root) {
   function onGesture(g) {
     highlightHudGesture(currentHud, g);
 
-    // B2: auto-pause on hand absence
     if (g === "idle") {
       state.setIdle(true);
       tts.stopAll();
@@ -173,7 +171,6 @@ export async function mount(root) {
       return;
     }
 
-    // B2: soft resume on any non-idle gesture while paused
     if (state.idle && g !== "idle") {
       state.setIdle(false);
       if (stepTimer) stepTimer.resume();
@@ -181,7 +178,6 @@ export async function mount(root) {
       tts.enqueue(`Picking up where we were. ${stepText.textContent}`);
     }
 
-    // B3: handle open_palm_hold to toggle sticky lock
     if (g === "open_palm_hold") {
       state.setLocked(!state.locked_step);
       refreshHud();
@@ -189,10 +185,9 @@ export async function mount(root) {
       return;
     }
 
-    // B3: when locked, ignore navigational gestures
     if (state.locked_step && (g === "swipe_left" || g === "swipe_right")) return;
 
-    // B3: fist or thumbs_up while locked releases lock first, then falls through
+    // fist or thumbs_up while locked releases lock first, then falls through
     if (state.locked_step && (g === "fist" || g === "thumbs_up")) {
       state.setLocked(false);
       refreshHud();

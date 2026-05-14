@@ -58,7 +58,7 @@ export const GestureEngine = (() => {
   let lastSeenHandAt = 0;
   let idleEmitted = false;
 
-  // palm hold state (B3: sticky step)
+  // palm hold state
   let palmHoldStart = 0;
   let palmHoldFired = false;
 
@@ -169,7 +169,7 @@ export const GestureEngine = (() => {
       cand = null; candCount = 0;
     }
 
-    // detect Open_Palm held for holdMs (B3: sticky step lock)
+    // detect Open_Palm held for holdMs (sticky step lock)
     if (passes && action === "Open_Palm") {
       if (palmHoldStart === 0) palmHoldStart = now;
       if (!palmHoldFired && now - palmHoldStart >= cfg.holdMs) {

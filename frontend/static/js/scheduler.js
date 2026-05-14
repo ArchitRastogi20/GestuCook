@@ -1,16 +1,19 @@
 // frontend/static/js/scheduler.js
-// Interleaves two recipes' steps by ETA from feature 1's `duration_seconds`.
+// Interleaves two recipes' steps by cumulative elapsed time.
+// Each recipe has a running clock. We advance whichever recipe's clock is currently behind.
+// Steps with no duration count as 0 seconds for scheduling but still appear.
 
 export function buildSchedule(recipeA, recipeB) {
-  // Pair: while A has a long-running step, slot B's quick steps in.
   const a = (recipeA.steps || []).map((s, i) => ({ recipe: "A", idx: i, text: stepText(s), dur: stepDur(s) }));
   const b = (recipeB.steps || []).map((s, i) => ({ recipe: "B", idx: i, text: stepText(s), dur: stepDur(s) }));
   const schedule = [];
   let ai = 0, bi = 0;
+  let ta = 0, tb = 0;       // elapsed seconds on each recipe's clock
   while (ai < a.length || bi < b.length) {
-    const cur = (a[ai]?.dur || 0) >= (b[bi]?.dur || 0) ? a[ai] : b[bi];
-    schedule.push(cur);
-    if (cur === a[ai]) ai++; else bi++;
+    if (ai >= a.length)      { schedule.push(b[bi]); tb += b[bi].dur || 0; bi++; }
+    else if (bi >= b.length) { schedule.push(a[ai]); ta += a[ai].dur || 0; ai++; }
+    else if (ta <= tb)       { schedule.push(a[ai]); ta += a[ai].dur || 0; ai++; }
+    else                     { schedule.push(b[bi]); tb += b[bi].dur || 0; bi++; }
   }
   return schedule;
 }

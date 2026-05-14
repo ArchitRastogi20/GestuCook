@@ -13,6 +13,7 @@ const tts = new TTSQueue();
 let videoEl, canvasEl, currentHud;
 let stepTimer = null;
 let voice = null;
+let unbindTTS = null;
 
 export async function mount(root) {
   if (state.mode === "parallel-2") {
@@ -155,14 +156,12 @@ export async function mount(root) {
     },
   });
 
-  // B5: mute mic while TTS plays to prevent echo
-  const _origEnqueue = tts.enqueue.bind(tts);
-  tts.enqueue = async (text) => {
-    voice?.mute();
-    await _origEnqueue(text);
-    // un-mute via a short delay (best-effort; refined in B6 with proper queue event)
-    setTimeout(() => voice?.unmute(), 500);
-  };
+  // mute mic while TTS plays to prevent echo, using proper listener (not monkey-patch)
+  if (unbindTTS) unbindTTS();
+  unbindTTS = tts.onPlayingChange((isPlaying) => {
+    if (isPlaying) voice?.mute();
+    else           voice?.unmute();
+  });
 
   voice.start();
 
@@ -284,6 +283,7 @@ async function mountParallel(root) {
 }
 
 export function unmount() {
+  unbindTTS?.();
   GestureEngine.stop();
   tts.stopAll();
   if (stepTimer) { stepTimer.stop(); stepTimer = null; }

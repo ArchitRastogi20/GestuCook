@@ -10,6 +10,15 @@ export class TTSQueue {
     this.playing = null;
     this.audio = null;
     this.inFlight = false;
+    this._listeners = new Set();
+  }
+
+  onPlayingChange(fn) {
+    this._listeners.add(fn);
+    return () => this._listeners.delete(fn);
+  }
+  _emitPlaying(isPlaying) {
+    for (const fn of this._listeners) fn(isPlaying);
   }
 
   get size() { return this.queue.length; }
@@ -35,11 +44,13 @@ export class TTSQueue {
       const blob = await this.fetcher(text);
       const url = URL.createObjectURL(blob);
       this.audio = new Audio(url);
-      this.audio.onended = () => { URL.revokeObjectURL(url); this.inFlight = false; this._next(); };
-      this.audio.onerror = () => { URL.revokeObjectURL(url); this.inFlight = false; this._next(); };
+      this.audio.onended = () => { URL.revokeObjectURL(url); this.inFlight = false; this._emitPlaying(false); this._next(); };
+      this.audio.onerror = () => { URL.revokeObjectURL(url); this.inFlight = false; this._emitPlaying(false); this._next(); };
+      this._emitPlaying(true);
       this.audio.play();
     } catch (e) {
       this.inFlight = false;
+      this._emitPlaying(false);
       this._next();
     }
   }

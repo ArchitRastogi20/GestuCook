@@ -7,6 +7,7 @@ import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
 import { VoiceLoop } from "../voice.js";
 import { saveMoment, loadMoments, captureFrame } from "../moments.js";
+import { buildSchedule } from "../scheduler.js";
 
 const tts = new TTSQueue();
 let videoEl, canvasEl, currentHud;
@@ -14,6 +15,10 @@ let stepTimer = null;
 let voice = null;
 
 export async function mount(root) {
+  if (state.mode === "parallel-2") {
+    return mountParallel(root);
+  }
+
   root.innerHTML = "";
   const r = state.recipes[state.recipe_index];
   if (!r) { state.go("recipes"); return; }
@@ -212,6 +217,68 @@ export async function mount(root) {
     if (i + 1 >= steps.length) { tts.stopAll(); state.go("epilogue"); return; }
     state.nextStep(); mount(root);
   }
+}
+
+async function mountParallel(root) {
+  root.innerHTML = "";
+  const A = state.recipes[state._parallelA];
+  const B = state.recipes[state._parallelB];
+  const schedule = buildSchedule(A, B);
+  let cursor = state._parCursor = state._parCursor || 0;
+
+  const eyebrow = Eyebrow({ text: `parallel · ${A.name} + ${B.name}` });
+
+  const stage = document.createElement("div");
+  stage.className = "parallel-stage";
+
+  const laneA = document.createElement("div"); laneA.className = "parallel-lane";
+  laneA.innerHTML = `<h3>${A.name}</h3><div class="step"></div>`;
+  const laneB = document.createElement("div"); laneB.className = "parallel-lane";
+  laneB.innerHTML = `<h3>${B.name}</h3><div class="step"></div>`;
+
+  function render() {
+    const cur = schedule[cursor];
+    laneA.classList.toggle("active", cur?.recipe === "A");
+    laneB.classList.toggle("active", cur?.recipe === "B");
+    laneA.querySelector(".step").textContent = (A.steps || []).map(s => typeof s === "string" ? s : s.text).filter((_, i) => {
+      const aSteps = schedule.filter(s => s.recipe === "A");
+      const idx = aSteps.findIndex(s => s.idx === i);
+      return idx === aSteps.slice(0, schedule.slice(0, cursor + 1).filter(s => s.recipe === "A").length).length - 1;
+    })[0] || "ready";
+    laneB.querySelector(".step").textContent = (B.steps || []).map(s => typeof s === "string" ? s : s.text).filter((_, i) => {
+      const bSteps = schedule.filter(s => s.recipe === "B");
+      const idx = bSteps.findIndex(s => s.idx === i);
+      return idx === bSteps.slice(0, schedule.slice(0, cursor + 1).filter(s => s.recipe === "B").length).length - 1;
+    })[0] || "ready";
+    if (cur) tts.enqueue(`${cur.recipe === "A" ? A.name : B.name}: ${cur.text}`);
+  }
+
+  stage.append(laneA, laneB);
+  const wrap = document.createElement("div");
+  wrap.className = "cooking-wrap";
+  wrap.append(eyebrow, stage);
+
+  const hud = Hud({ status: "tracking", active: null });
+  root.append(wrap, hud);
+  enter(wrap);
+
+  videoEl  = document.createElement("video"); videoEl.style.display = "none"; videoEl.playsInline = true; videoEl.muted = true;
+  canvasEl = document.createElement("canvas"); canvasEl.style.display = "none"; canvasEl.width = 320; canvasEl.height = 240;
+  await GestureEngine.init(videoEl, canvasEl, (g) => {
+    if (g === "swipe_right" || g === "thumbs_up") {
+      cursor = state._parCursor = Math.min(schedule.length - 1, cursor + 1);
+      render();
+      if (cursor === schedule.length - 1) state.go("epilogue");
+    }
+    if (g === "swipe_left") {
+      cursor = state._parCursor = Math.max(0, cursor - 1);
+      render();
+    }
+    if (g === "fist") state.go("recipes");
+  });
+  GestureEngine.start();
+
+  render();
 }
 
 export function unmount() {

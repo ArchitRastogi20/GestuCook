@@ -89,6 +89,7 @@ export async function mount(root) {
   enter(wrap);
 
   // wire gestures
+  let pickA = null, pickB = null;
   await GestureEngine.init(videoEl, canvasEl, (g) => onGesture(g));
   GestureEngine.start();
 
@@ -100,7 +101,29 @@ export async function mount(root) {
 
     if (g === "swipe_right") next();
     if (g === "swipe_left")  prev();
-    if (g === "thumbs_up")   state.go("cooking");
+
+    if (g === "victory") {
+      if (pickA == null) {
+        pickA = state.recipe_index;
+        import("../audio.js").then(m => new m.TTSQueue().enqueue(`Selected ${state.recipes[pickA].name}. Swipe to pick a second.`));
+        return;
+      } else if (pickA !== state.recipe_index && pickB == null) {
+        pickB = state.recipe_index;
+        import("../audio.js").then(m => new m.TTSQueue().enqueue(`Selected ${state.recipes[pickB].name}. Thumbs up to start cooking both.`));
+        return;
+      }
+    }
+
+    if (g === "thumbs_up") {
+      if (pickA != null && pickB != null && pickA !== pickB) {
+        state.mode = "parallel-2";
+        state._parallelA = pickA; state._parallelB = pickB;
+        state.go("cooking");
+        return;
+      }
+      state.go("cooking");
+    }
+
     if (g === "fist")        state.go("mode");
   }
   function next() { state.recipe_index = Math.min(total - 1, state.recipe_index + 1); mount(root); }

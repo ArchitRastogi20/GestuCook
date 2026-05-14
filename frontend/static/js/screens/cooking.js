@@ -4,10 +4,12 @@ import { state } from "../state.js";
 import { TTSQueue, Timer } from "../audio.js";
 import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
+import { VoiceLoop } from "../voice.js";
 
 const tts = new TTSQueue();
 let videoEl, canvasEl, currentHud;
 let stepTimer = null;
+let voice = null;
 
 export async function mount(root) {
   root.innerHTML = "";
@@ -100,6 +102,34 @@ export async function mount(root) {
   await GestureEngine.init(videoEl, canvasEl, (g) => onGesture(g));
   GestureEngine.start();
 
+  // B5: stop any previous voice loop and start a fresh one for this mount
+  if (voice) { voice.stop(); voice = null; }
+  voice = new VoiceLoop({
+    onCommand: (action) => {
+      if (action === "next")    advance();
+      if (action === "back")    { state.prevStep(); mount(root); }
+      if (action === "repeat")  tts.enqueue(stepText.textContent);
+      if (action === "pause")   { tts.stopAll(); stepTimer?.pause(); state.setIdle(true); refreshHud(); }
+      if (action === "resume")  { stepTimer?.resume(); state.setIdle(false); refreshHud(); }
+      if (action === "ambient_enter") state.go("ambient");
+      if (action === "trainer") state.go("trainer");
+      if (action === "save_moment" && window.__saveMoment) window.__saveMoment(state.session_id, state.step_index);
+    },
+    // onQA wired in B6
+    onQA: () => {},
+  });
+
+  // B5: mute mic while TTS plays to prevent echo
+  const _origEnqueue = tts.enqueue.bind(tts);
+  tts.enqueue = async (text) => {
+    voice?.mute();
+    await _origEnqueue(text);
+    // un-mute via a short delay (best-effort; refined in B6 with proper queue event)
+    setTimeout(() => voice?.unmute(), 500);
+  };
+
+  voice.start();
+
   function onGesture(g) {
     if (currentHud) {
       for (const p of currentHud.querySelectorAll(".gp")) p.classList.remove("on");
@@ -158,4 +188,5 @@ export function unmount() {
   GestureEngine.stop();
   tts.stopAll();
   if (stepTimer) { stepTimer.stop(); stepTimer = null; }
+  if (voice) { voice.stop(); voice = null; }
 }

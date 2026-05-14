@@ -13,8 +13,9 @@ import * as recipes from "./screens/recipes.js";
 import * as cooking  from "./screens/cooking.js";
 import * as epilogue from "./screens/epilogue.js";
 import * as ambient  from "./screens/ambient.js";
+import * as trainer  from "./screens/trainer.js";
 
-const SCREENS = { welcome, mode, photo, handsfree, recipes, cooking, epilogue, ambient };
+const SCREENS = { welcome, mode, photo, handsfree, recipes, cooking, epilogue, ambient, trainer };
 
 const root = document.querySelector("#screen-root");
 let current = null;

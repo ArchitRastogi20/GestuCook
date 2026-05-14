@@ -56,6 +56,8 @@ export async function mount(root) {
     Button({ label: "Start cooking", trailingIcon: "arrowRight", onClick: () => state.go("cooking") }),
     Button({ label: "Read aloud",   intent: "ghost", onClick: () => import("../audio.js").then(m => new m.TTSQueue().enqueue(r.name + ". " + (r.description || ""))) }),
   );
+  const trainBtn = Button({ label: "Practice gestures", intent: "ghost", onClick: () => state.go("trainer") });
+  cta.append(trainBtn);
 
   const featured = Bezel({ children: [meta, title, desc, ing, cta] });
 

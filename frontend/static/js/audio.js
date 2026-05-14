@@ -26,10 +26,10 @@ export class TTSQueue {
   }
 
   async _next() {
+    if (this.inFlight) return;       // another _next() is mid-fetch; will pick up after onended
     const text = this.queue.shift();
     if (!text) { this.playing = null; return; }
     this.playing = text;
-    if (this.inFlight) return;
     this.inFlight = true;
     try {
       const blob = await this.fetcher(text);

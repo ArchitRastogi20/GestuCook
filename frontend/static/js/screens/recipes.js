@@ -1,5 +1,5 @@
 // frontend/static/js/screens/recipes.js
-import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade } from "../ui/components.js";
+import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade, highlightHudGesture } from "../ui/components.js";
 import { state } from "../state.js";
 import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
@@ -96,9 +96,7 @@ export async function mount(root) {
 
   function onGesture(g) {
     // active pill highlight
-    for (const p of hud.querySelectorAll(".gp")) p.classList.remove("on");
-    const pill = hud.querySelector(`[data-gesture="${g}"]`);
-    if (pill) pill.classList.add("on");
+    highlightHudGesture(hud, g);
 
     if (g === "swipe_right") next();
     if (g === "swipe_left")  prev();

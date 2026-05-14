@@ -1,5 +1,5 @@
 // frontend/static/js/screens/cooking.js
-import { Bezel, Eyebrow, Button, PipFrame, Hud } from "../ui/components.js";
+import { Bezel, Eyebrow, Button, PipFrame, Hud, highlightHudGesture } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { TTSQueue, Timer } from "../audio.js";
@@ -162,11 +162,7 @@ export async function mount(root) {
   voice.start();
 
   function onGesture(g) {
-    if (currentHud) {
-      for (const p of currentHud.querySelectorAll(".gp")) p.classList.remove("on");
-      const pill = currentHud.querySelector(`[data-gesture="${g}"]`);
-      if (pill) pill.classList.add("on");
-    }
+    highlightHudGesture(currentHud, g);
 
     // B2: auto-pause on hand absence
     if (g === "idle") {

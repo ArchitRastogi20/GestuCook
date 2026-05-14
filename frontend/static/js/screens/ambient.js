@@ -1,6 +1,6 @@
 // frontend/static/js/screens/ambient.js
 import { state } from "../state.js";
-import { Hud } from "../ui/components.js";
+import { Hud, highlightHudGesture } from "../ui/components.js";
 import { GestureEngine } from "../gestures.js";
 import { TTSQueue } from "../audio.js";
 import { VoiceLoop } from "../voice.js";
@@ -56,9 +56,7 @@ export async function mount(root) {
   tts.enqueue(stepText);
 
   function onGesture(g) {
-    for (const p of hud.querySelectorAll(".gp")) p.classList.remove("on");
-    const pill = hud.querySelector(`[data-gesture="${g}"]`);
-    if (pill) pill.classList.add("on");
+    highlightHudGesture(hud, g);
     if (g === "swipe_right" || g === "thumbs_up") next();
     if (g === "swipe_left")  prev();
     if (g === "pointing_up") state.go("cooking");

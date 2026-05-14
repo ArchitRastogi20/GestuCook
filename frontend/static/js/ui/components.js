@@ -84,6 +84,12 @@ export function Hud({ status = "tracking", active = null, timer = null, locked =
   return Capsule({ position: "bottom", items });
 }
 
+export function highlightHudGesture(hud, gesture) {
+  if (!hud) return;
+  for (const p of hud.querySelectorAll(".gp")) p.classList.remove("on");
+  if (gesture) hud.querySelector(`[data-gesture="${gesture}"]`)?.classList.add("on");
+}
+
 export function Cascade({ items = [], focusedIndex = 0 } = {}) {
   const wrap = el("div", { cls: "cascade" });
   const prev = items[focusedIndex - 1];

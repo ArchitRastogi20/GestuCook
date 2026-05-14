@@ -1,285 +1,217 @@
-// gestures.js - Robust MediaPipe Hands gesture recognition
-// State-machine approach: detect pose, require it to be HELD for N frames,
-// then fire ONCE, then enter cooldown. No repeated triggers.
+// frontend/static/js/gestures.js
+// Hybrid pipeline:
+//   - MediaPipe Tasks Vision GestureRecognizer for static pose classification
+//   - Custom wrist-trajectory layer for swipes
+//
+// onGesture(name) names: thumbs_up, fist, open_palm, pointing_up, victory,
+//                        swipe_left, swipe_right, idle (no-hand)
 
-const GestureEngine = (() => {
-    let hands = null;
-    let camera = null;
-    let videoEl = null;
-    let canvasEl = null;
-    let canvasCtx = null;
-    let onGesture = null;
-    let running = false;
+import { FilesetResolver, GestureRecognizer } from "/static/vendor/mediapipe/vision_bundle.mjs";
 
-    // ── state machine ────────────────────────────────────
-    // A gesture must be seen for CONFIRM_FRAMES consecutive frames
-    // before it fires. After firing, COOLDOWN_MS must pass before
-    // any gesture (same or different) can fire again.
+const DEFAULTS = {
+  confidence: {
+    Thumb_Up:   0.85,
+    Closed_Fist:0.85,
+    Open_Palm:  0.75,
+    Pointing_Up:0.80,
+    Victory:    0.80,
+  },
+  confirmFrames: {
+    Thumb_Up:   8,
+    Closed_Fist:8,
+    Open_Palm:  5,
+    Pointing_Up:6,
+    Victory:    6,
+  },
+  cooldownMs:    1600,
+  palmCooldownMs:600,
+  idleMs:        3000,
+  swipeWindow:   20,
+  swipeThreshold:0.18,
+  swipeMinMs:    120,
+  swipeMaxMs:    600,
+};
 
-    const CONFIRM_FRAMES = 5;
-    const COOLDOWN_MS = 1800;
+const TO_ACTION = {
+  Thumb_Up:    "thumbs_up",
+  Closed_Fist: "fist",
+  Open_Palm:   "open_palm",
+  Pointing_Up: "pointing_up",
+  Victory:     "victory",
+};
 
-    let candidateGesture = null;   // what we think user is doing
-    let candidateCount = 0;        // how many frames we've seen it
-    let lastFiredTime = 0;         // when we last emitted a gesture
-    let inCooldown = false;
+export const GestureEngine = (() => {
+  let recognizer = null;
+  let onGesture = null;
+  let videoEl = null;
+  let canvasEl = null;
+  let ctx = null;
+  let running = false;
+  let cfg = JSON.parse(JSON.stringify(DEFAULTS));
 
-    // ── swipe tracking (separate from static poses) ──────
-    // We track wrist position over a sliding window.
-    // A swipe is: wrist moved > SWIPE_THRESHOLD in < SWIPE_MAX_MS
-    // After a swipe fires, we require hand to return near center
-    // before another swipe can happen.
+  // confirm state
+  let cand = null;
+  let candCount = 0;
+  let lastFireAt = 0;
+  let lastFireClass = null;
+  let lastSeenHandAt = 0;
+  let idleEmitted = false;
 
-    const SWIPE_THRESHOLD = 0.18;
-    const SWIPE_MAX_MS = 600;
-    const SWIPE_MIN_MS = 120;
+  // swipe state
+  let wristHistory = [];
+  let swipeLocked = false;
 
-    let wristHistory = [];         // [{x, t}, ...]
-    const WRIST_HISTORY_MAX = 20;
-    let swipeLocked = false;       // prevent rapid re-swipe
+  // ring buffer for diagnostics
+  const ring = [];
+  function diag(entry) { ring.push(entry); if (ring.length > 50) ring.shift(); }
+  function getDiagnostics() { return ring.slice(); }
 
-    function init(video, canvas, callback) {
-        videoEl = video;
-        canvasEl = canvas;
-        canvasCtx = canvas.getContext("2d");
-        onGesture = callback;
+  async function init(video, canvas, callback) {
+    videoEl = video; canvasEl = canvas; ctx = canvas.getContext("2d"); onGesture = callback;
+    const vision = await FilesetResolver.forVisionTasks("/static/vendor/mediapipe/wasm");
+    recognizer = await GestureRecognizer.createFromOptions(vision, {
+      baseOptions: {
+        modelAssetPath: "/static/vendor/mediapipe/gesture_recognizer.task",
+        delegate: "GPU",
+      },
+      runningMode: "VIDEO",
+      numHands: 1,
+      minHandDetectionConfidence: 0.55,
+      minHandPresenceConfidence:  0.55,
+      minTrackingConfidence:      0.50,
+    });
+  }
 
-        hands = new window.Hands({
-            locateFile: (file) =>
-                "https://cdn.jsdelivr.net/npm/@mediapipe/hands/" + file,
-        });
+  async function start() {
+    if (running || !recognizer) return;
+    running = true; _reset();
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: false });
+    videoEl.srcObject = stream;
+    await videoEl.play();
+    _loop();
+  }
 
-        hands.setOptions({
-            maxNumHands: 1,
-            modelComplexity: 0,
-            minDetectionConfidence: 0.65,
-            minTrackingConfidence: 0.55,
-        });
+  function stop() {
+    running = false;
+    if (videoEl?.srcObject) videoEl.srcObject.getTracks().forEach(t => t.stop());
+    _reset();
+  }
 
-        hands.onResults(processResults);
+  function _reset() {
+    cand = null; candCount = 0; wristHistory = []; swipeLocked = false; idleEmitted = false;
+  }
+
+  async function _loop() {
+    if (!running) return;
+    const now = performance.now();
+    if (videoEl.readyState >= 2) {
+      const res = await recognizer.recognizeForVideo(videoEl, now);
+      _tick(res, now);
+    }
+    requestAnimationFrame(_loop);
+  }
+
+  function _tick(res, now) {
+    _drawLandmarks(res);
+    const hasHand = !!(res.landmarks && res.landmarks[0]);
+
+    // idle / auto-pause emission
+    if (hasHand) {
+      lastSeenHandAt = now;
+      if (idleEmitted) { idleEmitted = false; }
+    } else {
+      if (!idleEmitted && now - lastSeenHandAt > cfg.idleMs && lastSeenHandAt > 0) {
+        idleEmitted = true;
+        onGesture && onGesture("idle");
+      }
+      _reset();
+      return;
     }
 
-    async function start() {
-        if (running) return;
-        running = true;
-        resetState();
+    const cooldown = lastFireClass === "Open_Palm" ? cfg.palmCooldownMs : cfg.cooldownMs;
+    if (now - lastFireAt < cooldown) return;
 
-        camera = new window.Camera(videoEl, {
-            onFrame: async () => {
-                if (!running) return;
-                await hands.send({ image: videoEl });
-            },
-            width: 320,
-            height: 240,
-        });
-        await camera.start();
+    const top = (res.gestures?.[0]?.[0]) || { categoryName: "None", score: 0 };
+    const action = TO_ACTION[top.categoryName] ? top.categoryName : null;
+    const floor  = action ? cfg.confidence[action] : 1.0;
+    const passes = action && top.score >= floor;
+
+    // swipe gating: only attempt if top is None or below floor
+    if (!passes) {
+      const wrist = res.landmarks?.[0]?.[0];
+      if (wrist) _trackWrist(wrist.x, now);
+      const swipe = _detectSwipe(now);
+      if (swipe) { _fire(swipe, now, "swipe", top.score); return; }
+    } else {
+      // we have a confident static pose -- invalidate swipe attempts
+      wristHistory = [];
     }
 
-    function stop() {
-        running = false;
-        if (camera) {
-            camera.stop();
-            camera = null;
-        }
-        resetState();
+    // confirm-frame discipline
+    if (passes) {
+      if (cand === action) {
+        candCount += 1;
+      } else {
+        cand = action; candCount = 1;
+      }
+      const needed = cfg.confirmFrames[action];
+      if (candCount >= needed) {
+        _fire(TO_ACTION[action], now, "static", top.score);
+        cand = null; candCount = 0;
+      }
+    } else {
+      cand = null; candCount = 0;
     }
+  }
 
-    function resetState() {
-        candidateGesture = null;
-        candidateCount = 0;
-        inCooldown = false;
-        wristHistory = [];
-        swipeLocked = false;
+  function _fire(actionName, now, source, score) {
+    lastFireAt = now;
+    lastFireClass = Object.entries(TO_ACTION).find(([k, v]) => v === actionName)?.[0] || null;
+    wristHistory = []; swipeLocked = true;
+    diag({ ts: Date.now(), class: actionName, score, source });
+    onGesture && onGesture(actionName);
+  }
+
+  function _trackWrist(x, t) {
+    wristHistory.push({ x, t });
+    if (wristHistory.length > cfg.swipeWindow) wristHistory.shift();
+    if (swipeLocked && x > 0.35 && x < 0.65) swipeLocked = false;
+  }
+  function _detectSwipe(now) {
+    if (swipeLocked || wristHistory.length < 4) return null;
+    const oldest = wristHistory[0];
+    const newest = wristHistory[wristHistory.length - 1];
+    const dt = newest.t - oldest.t;
+    const dx = newest.x - oldest.x;
+    if (dt < cfg.swipeMinMs || dt > cfg.swipeMaxMs) return null;
+    if (dx >  cfg.swipeThreshold) { wristHistory = []; return "swipe_left";  }
+    if (dx < -cfg.swipeThreshold) { wristHistory = []; return "swipe_right"; }
+    return null;
+  }
+
+  function _drawLandmarks(res) {
+    if (!ctx || !canvasEl) return;
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    const lm = res.landmarks?.[0];
+    if (!lm) return;
+    ctx.fillStyle = "rgba(176, 120, 73, 0.65)";
+    for (const p of lm) {
+      ctx.beginPath();
+      ctx.arc(p.x * canvasEl.width, p.y * canvasEl.height, 3, 0, 2 * Math.PI);
+      ctx.fill();
     }
+  }
 
-    // ── main processing loop ─────────────────────────────
-    function processResults(results) {
-        canvasCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+  // test surface
+  function __forTest({ onGesture: cb, confidence, confirmFrames, cooldownMs, idleMs } = {}) {
+    onGesture = cb;
+    if (confidence)   cfg.confidence    = { ...cfg.confidence, ...confidence };
+    if (confirmFrames) cfg.confirmFrames = { ...cfg.confirmFrames, ...confirmFrames };
+    if (cooldownMs   != null) cfg.cooldownMs = cooldownMs;
+    if (idleMs       != null) cfg.idleMs     = idleMs;
+    _reset(); lastFireAt = 0;
+    return { _tick };
+  }
 
-        if (!results.multiHandLandmarks || results.multiHandLandmarks.length === 0) {
-            // no hand visible: reset candidate but keep cooldown
-            candidateGesture = null;
-            candidateCount = 0;
-            wristHistory = [];
-            swipeLocked = false;
-            return;
-        }
-
-        const lm = results.multiHandLandmarks[0];
-        drawLandmarks(lm);
-
-        const now = Date.now();
-
-        // check cooldown
-        if (inCooldown) {
-            if (now - lastFiredTime >= COOLDOWN_MS) {
-                inCooldown = false;
-            } else {
-                // still in cooldown: track wrist but don't recognize
-                trackWrist(lm[0].x, now);
-                return;
-            }
-        }
-
-        // try swipe first (motion-based, separate from static poses)
-        trackWrist(lm[0].x, now);
-        const swipe = detectSwipe(now);
-        if (swipe) {
-            fireGesture(swipe, now);
-            return;
-        }
-
-        // static pose recognition
-        const pose = recognizeStaticPose(lm);
-
-        if (pose === null) {
-            // no recognizable pose
-            candidateGesture = null;
-            candidateCount = 0;
-            return;
-        }
-
-        // same pose as before? increment counter
-        if (pose === candidateGesture) {
-            candidateCount++;
-        } else {
-            // different pose: restart counter
-            candidateGesture = pose;
-            candidateCount = 1;
-        }
-
-        // confirmed?
-        if (candidateCount >= CONFIRM_FRAMES) {
-            fireGesture(pose, now);
-            candidateGesture = null;
-            candidateCount = 0;
-        }
-    }
-
-    function fireGesture(gesture, now) {
-        lastFiredTime = now;
-        inCooldown = true;
-        // reset swipe state after any fire
-        wristHistory = [];
-        swipeLocked = true;
-
-        if (onGesture) onGesture(gesture);
-    }
-
-    // ── drawing ──────────────────────────────────────────
-    function drawLandmarks(lm) {
-        canvasCtx.fillStyle = "rgba(245, 158, 11, 0.5)";
-        for (var i = 0; i < lm.length; i++) {
-            var p = lm[i];
-            canvasCtx.beginPath();
-            canvasCtx.arc(
-                p.x * canvasEl.width,
-                p.y * canvasEl.height,
-                3, 0, 2 * Math.PI
-            );
-            canvasCtx.fill();
-        }
-    }
-
-    // ── static pose recognition ──────────────────────────
-    function recognizeStaticPose(lm) {
-        // Landmarks:
-        // 0=wrist 4=thumb_tip 3=thumb_ip 2=thumb_mcp
-        // 8=index_tip 6=index_pip 5=index_mcp
-        // 12=middle_tip 10=middle_pip
-        // 16=ring_tip 14=ring_pip
-        // 20=pinky_tip 18=pinky_pip
-
-        var thumbTip = lm[4];
-        var thumbIp = lm[3];
-        var thumbMcp = lm[2];
-        var wrist = lm[0];
-
-        var tips = [lm[8], lm[12], lm[16], lm[20]];
-        var pips = [lm[6], lm[10], lm[14], lm[18]];
-        var mcps = [lm[5], lm[9], lm[13], lm[17]];
-
-        // finger "up" = tip is significantly above pip (lower y)
-        var margin = 0.03;
-        var fingersUp = [];
-        for (var i = 0; i < 4; i++) {
-            fingersUp.push(tips[i].y < pips[i].y - margin);
-        }
-
-        // finger "curled" = tip is below mcp
-        var fingersCurled = [];
-        for (var i = 0; i < 4; i++) {
-            fingersCurled.push(tips[i].y > mcps[i].y);
-        }
-
-        var allCurled = fingersCurled[0] && fingersCurled[1] &&
-                        fingersCurled[2] && fingersCurled[3];
-        var allUp = fingersUp[0] && fingersUp[1] &&
-                    fingersUp[2] && fingersUp[3];
-
-        var thumbUp = thumbTip.y < thumbIp.y - 0.04 &&
-                      thumbTip.y < thumbMcp.y - 0.06;
-        var thumbCurled = thumbTip.y > thumbIp.y;
-
-        // THUMBS UP: thumb clearly above wrist, all 4 fingers curled
-        if (thumbUp && allCurled && thumbTip.y < wrist.y - 0.12) {
-            return "thumbs_up";
-        }
-
-        // CLOSED FIST: all fingers curled, thumb also curled or tucked
-        if (allCurled && thumbCurled) {
-            return "fist";
-        }
-
-        // OPEN PALM: all 4 fingers up and thumb extended
-        // But we do NOT fire open_palm if wrist is moving fast (that's a swipe)
-        if (allUp && thumbUp) {
-            return "open_palm";
-        }
-
-        return null;
-    }
-
-    // ── swipe detection ──────────────────────────────────
-    function trackWrist(x, t) {
-        wristHistory.push({ x: x, t: t });
-        // keep only recent entries
-        while (wristHistory.length > WRIST_HISTORY_MAX) {
-            wristHistory.shift();
-        }
-
-        // unlock swipe if wrist returned to center zone
-        if (swipeLocked) {
-            if (x > 0.35 && x < 0.65) {
-                swipeLocked = false;
-            }
-        }
-    }
-
-    function detectSwipe(now) {
-        if (swipeLocked) return null;
-        if (wristHistory.length < 4) return null;
-
-        // look at oldest vs newest in the window
-        var oldest = wristHistory[0];
-        var newest = wristHistory[wristHistory.length - 1];
-        var dt = newest.t - oldest.t;
-        var dx = newest.x - oldest.x;
-
-        if (dt < SWIPE_MIN_MS || dt > SWIPE_MAX_MS) return null;
-
-        // camera is mirrored: positive dx in data = user swiped left visually
-        if (dx > SWIPE_THRESHOLD) {
-            wristHistory = [];
-            return "swipe_left";
-        }
-        if (dx < -SWIPE_THRESHOLD) {
-            wristHistory = [];
-            return "swipe_right";
-        }
-
-        return null;
-    }
-
-    return { init, start, stop };
+  return { init, start, stop, getDiagnostics, __forTest };
 })();

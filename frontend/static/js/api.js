@@ -36,10 +36,9 @@ export const api = {
     return fetch(`${BASE}/asr`, { method: "POST", body: fd }).then(r => r.json());
   },
   speak(text) {
-    return fetch(`${BASE}/tts`, { method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text })
-    }).then(r => r.blob());
+    const fd = new FormData();
+    fd.append("text", text);
+    return fetch(`${BASE}/tts`, { method: "POST", body: fd }).then(r => r.blob());
   },
   costSnapshot() { return jsonGet("/cost"); },
 

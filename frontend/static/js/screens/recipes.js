@@ -7,6 +7,7 @@ import { GestureEngine } from "../gestures.js";
 let videoEl, canvasEl;
 
 export async function mount(root) {
+  GestureEngine.stop();  // tear down any previous stream before we start a new one
   root.innerHTML = "";
   if (!state.recipes.length) { state.go("mode"); return; }
 

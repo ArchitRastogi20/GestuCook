@@ -19,6 +19,7 @@ export async function mount(root) {
     return mountParallel(root);
   }
 
+  GestureEngine.stop();  // tear down any previous stream before we start a new one
   root.innerHTML = "";
   const r = state.recipes[state.recipe_index];
   if (!r) { state.go("recipes"); return; }
@@ -220,6 +221,7 @@ export async function mount(root) {
 }
 
 async function mountParallel(root) {
+  GestureEngine.stop();  // tear down any previous stream before we start a new one
   root.innerHTML = "";
   const A = state.recipes[state._parallelA];
   const B = state.recipes[state._parallelB];

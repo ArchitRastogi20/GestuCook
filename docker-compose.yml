@@ -26,6 +26,10 @@ services:
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-google/gemma-4-31b-it:free}
       - ASR_URL=http://asr-service:8001
       - TTS_URL=http://tts-service:8002
+      - MONGO_URL=${MONGO_URL:-mongodb://host.docker.internal:27017}
+      - MONGO_DB=gestucook
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     depends_on:
       - asr-service
       - tts-service

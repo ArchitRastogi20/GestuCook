@@ -71,3 +71,14 @@ main { flex: 1; padding: var(--space-5); max-width: 1120px; margin: 0 auto; widt
 .recipes-cta { margin-top: var(--space-6); display: flex; gap: var(--space-3); }
 
 @media (max-width: 900px) { .recipes-stage { grid-template-columns: 1fr; } }
+
+/* cooking */
+.cooking-wrap { max-width: 760px; margin: var(--space-5) auto; }
+.cooking-progress { display: flex; gap: 6px; justify-content: center; margin: var(--space-4) 0; }
+.cooking-progress .pip { width: 28px; height: 4px; border-radius: 2px; background: var(--hairline); padding: 0; box-shadow: none; border: none; }
+.cooking-progress .pip.done    { background: var(--sage); }
+.cooking-progress .pip.current { background: var(--copper); }
+.cooking-step-text { font-family: var(--font-display); font-variation-settings: "opsz" 144, "SOFT" 100;
+  font-weight: 400; font-size: clamp(28px, 4.2vw, 44px); line-height: 1.1; letter-spacing: -0.018em; color: var(--ink);
+}
+.cooking-cta { display: flex; gap: var(--space-3); justify-content: center; margin-top: var(--space-5); flex-wrap: wrap; }

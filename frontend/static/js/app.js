@@ -10,9 +10,10 @@ import * as mode    from "./screens/mode.js";
 import * as photo   from "./screens/photo.js";
 import * as handsfree from "./screens/handsfree.js";
 import * as recipes from "./screens/recipes.js";
-import * as cooking from "./screens/cooking.js";
+import * as cooking  from "./screens/cooking.js";
+import * as epilogue from "./screens/epilogue.js";
 
-const SCREENS = { welcome, mode, photo, handsfree, recipes, cooking };
+const SCREENS = { welcome, mode, photo, handsfree, recipes, cooking, epilogue };
 
 const root = document.querySelector("#screen-root");
 let current = null;

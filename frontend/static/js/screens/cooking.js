@@ -16,6 +16,9 @@ export async function mount(root) {
   const steps = r.steps || [];
   const i = state.step_index = Math.min(state.step_index, steps.length - 1);
 
+  // record when the cooking session started (used by epilogue for duration)
+  if (!state._epStartedAt) state._epStartedAt = Date.now();
+
   // stop any lingering timer from the previous step
   if (stepTimer) { stepTimer.stop(); stepTimer = null; }
 
@@ -146,7 +149,7 @@ export async function mount(root) {
   }
 
   function advance() {
-    if (i + 1 >= steps.length) { tts.stopAll(); state.go("recipes"); return; }
+    if (i + 1 >= steps.length) { tts.stopAll(); state.go("epilogue"); return; }
     state.nextStep(); mount(root);
   }
 }

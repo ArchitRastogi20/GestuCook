@@ -82,3 +82,17 @@ main { flex: 1; padding: var(--space-5); max-width: 1120px; margin: 0 auto; widt
   font-weight: 400; font-size: clamp(28px, 4.2vw, 44px); line-height: 1.1; letter-spacing: -0.018em; color: var(--ink);
 }
 .cooking-cta { display: flex; gap: var(--space-3); justify-content: center; margin-top: var(--space-5); flex-wrap: wrap; }
+
+/* epilogue */
+.epilogue-wrap { max-width: 720px; margin: var(--space-7) auto; text-align: center; }
+.epilogue-eyebrow { display: inline-flex; margin-bottom: var(--space-5); }
+.epilogue-h1 { font-family: var(--font-display); font-variation-settings: "opsz" 144, "SOFT" 100;
+  font-weight: 400; font-size: clamp(56px, 7vw, 84px); line-height: 0.95; letter-spacing: -0.026em;
+  color: var(--ink); margin-bottom: var(--space-4);
+}
+.epilogue-stat { font-family: var(--font-mono); font-size: 13px; color: var(--ink-2); }
+.epilogue-stat b { color: var(--ink); }
+.epilogue-sheet { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--space-3); margin-top: var(--space-6); }
+.epilogue-sheet .frame { aspect-ratio: 4/3; border-radius: var(--r-sm); overflow: hidden; border: 1px solid var(--hairline); background: var(--shell); }
+.epilogue-sheet .frame img { width: 100%; height: 100%; object-fit: cover; }
+.epilogue-sheet .frame .caption { font-family: var(--font-mono); font-size: 11px; color: var(--ink-3); padding: 6px 8px; }

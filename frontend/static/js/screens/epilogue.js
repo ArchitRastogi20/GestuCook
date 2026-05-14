@@ -20,28 +20,22 @@ export async function mount(root) {
 
   let monthCount = 1;
   if (state.user?.name) {
-    try {
-      const h = await api.session.history(state.user.name, 1);
-      monthCount = h?.totals?.month_count || 1;
-    } catch {}
-  }
+    const historyP = api.session.history(state.user.name, 1).catch(() => null);
+    const endP = state.session_id ? api.session.end({
+      session_id: state.session_id,
+      recipe_title: recipeTitle,
+      total_cost_usd: state.cost.usd,
+      tokens_in: state.cost.in,
+      tokens_out: state.cost.out,
+      completed_steps: (r?.steps?.length) || 0,
+      total_steps:    (r?.steps?.length) || 0,
+      voice_qa_count: state._qaCount || 0,
+      moments_count:  state._momentsCount || 0,
+      mode: state.mode,
+    }).catch(() => null) : Promise.resolve(null);
 
-  // close the session on the backend
-  if (state.session_id && state.user?.name) {
-    try {
-      await api.session.end({
-        session_id: state.session_id,
-        recipe_title: recipeTitle,
-        total_cost_usd: state.cost.usd,
-        tokens_in: state.cost.in,
-        tokens_out: state.cost.out,
-        completed_steps: (r?.steps?.length) || 0,
-        total_steps:    (r?.steps?.length) || 0,
-        voice_qa_count: state._qaCount || 0,
-        moments_count:  state._momentsCount || 0,
-        mode: state.mode,
-      });
-    } catch {}
+    const [h] = await Promise.all([historyP, endP]);
+    monthCount = h?.totals?.month_count || 1;
   }
 
   const eyebrow = Eyebrow({ text: "well done" });

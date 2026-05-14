@@ -40,7 +40,7 @@ export const api = {
     fd.append("text", text);
     return fetch(`${BASE}/tts`, { method: "POST", body: fd }).then(r => r.blob());
   },
-  costSnapshot() { return jsonGet("/cost"); },
+  costSnapshot() { return jsonGet("/config"); },
 
   // new session endpoints
   session: {

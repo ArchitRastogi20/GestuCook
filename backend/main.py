@@ -16,12 +16,14 @@ from typing import Optional
 from PIL import Image
 from db import ensure_indexes
 from routes_session import router as session_router
+from routes_qa import router as qa_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gestucook")
 
 app = FastAPI(title="GestuCook API")
 app.include_router(session_router)
+app.include_router(qa_router)
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")

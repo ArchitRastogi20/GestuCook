@@ -1,6 +1,7 @@
 // frontend/static/js/screens/cooking.js
 import { Bezel, Eyebrow, Button, PipFrame, Hud } from "../ui/components.js";
 import { state } from "../state.js";
+import { api } from "../api.js";
 import { TTSQueue, Timer } from "../audio.js";
 import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
@@ -115,8 +116,23 @@ export async function mount(root) {
       if (action === "trainer") state.go("trainer");
       if (action === "save_moment" && window.__saveMoment) window.__saveMoment(state.session_id, state.step_index);
     },
-    // onQA wired in B6
-    onQA: () => {},
+    onQA: async (question) => {
+      if (!state.recipes[state.recipe_index]) return;
+      const recipe = state.recipes[state.recipe_index];
+      try {
+        const res = await api.qa({
+          session_id: state.session_id,
+          current_recipe: recipe,
+          current_step_index: state.step_index,
+          question,
+        });
+        state.addCost({ usd: res.cost_delta_usd, in: res.tokens_in, out: res.tokens_out });
+        state._qaCount = (state._qaCount || 0) + 1;
+        tts.enqueue(res.answer);
+      } catch (e) {
+        tts.enqueue("Sorry, I couldn't answer that.");
+      }
+    },
   });
 
   // B5: mute mic while TTS plays to prevent echo

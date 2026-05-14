@@ -104,7 +104,7 @@ export async function mount(root) {
       if (pill) pill.classList.add("on");
     }
 
-    // B1/B2: handle idle
+    // B2: auto-pause on hand absence
     if (g === "idle") {
       state.setIdle(true);
       tts.stopAll();
@@ -113,7 +113,7 @@ export async function mount(root) {
       return;
     }
 
-    // B2: resume on any non-idle gesture while paused
+    // B2: soft resume on any non-idle gesture while paused
     if (state.idle && g !== "idle") {
       state.setIdle(false);
       if (stepTimer) stepTimer.resume();

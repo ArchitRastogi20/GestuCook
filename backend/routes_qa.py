@@ -8,6 +8,8 @@ from db import events
 
 router = APIRouter(prefix="/api", tags=["qa"])
 
+_QA_CLIENT = httpx.AsyncClient(timeout=30.0)
+
 
 class QABody(BaseModel):
     session_id: str
@@ -65,11 +67,11 @@ async def qa(body: QABody):
         "max_tokens": 80,
         "temperature": 0.3,
     }
-    async with httpx.AsyncClient(timeout=30.0) as c:
-        r = await c.post(url, headers={"Authorization": f"Bearer {key}"}, json=payload)
-        if r.status_code != 200:
-            raise HTTPException(502, "llm upstream error")
-        data = r.json()
+    c = _QA_CLIENT
+    r = await c.post(url, headers={"Authorization": f"Bearer {key}"}, json=payload)
+    if r.status_code != 200:
+        raise HTTPException(502, "llm upstream error")
+    data = r.json()
 
     text = data["choices"][0]["message"]["content"].strip()
     n_out = len(enc.encode(text))

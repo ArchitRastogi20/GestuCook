@@ -4,6 +4,7 @@ import { state } from "../state.js";
 import { api } from "../api.js";
 import { TTSQueue } from "../audio.js";
 import { enter } from "../ui/motion.js";
+import { loadMoments } from "../moments.js";
 
 const tts = new TTSQueue();
 
@@ -56,15 +57,12 @@ export async function mount(root) {
 
   const sheet = document.createElement("div");
   sheet.className = "epilogue-sheet";
-  // moments are loaded by feature 10 later; for now, empty
-  if (window.__loadMoments) {
-    const m = await window.__loadMoments(state.session_id);
-    for (const e of m) {
-      const cell = document.createElement("div"); cell.className = "frame";
-      const img = document.createElement("img"); img.src = URL.createObjectURL(e.blob);
-      const cap = document.createElement("div"); cap.className = "caption"; cap.textContent = `step ${e.step_num}`;
-      cell.append(img, cap); sheet.append(cell);
-    }
+  const m = await loadMoments(state.session_id);
+  for (const e of m) {
+    const cell = document.createElement("div"); cell.className = "frame";
+    const img = document.createElement("img"); img.src = URL.createObjectURL(e.blob);
+    const cap = document.createElement("div"); cap.className = "caption"; cap.textContent = `step ${e.step_num}`;
+    cell.append(img, cap); sheet.append(cell);
   }
 
   const cta = document.createElement("div");

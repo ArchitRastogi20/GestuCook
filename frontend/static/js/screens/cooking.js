@@ -72,18 +72,14 @@ export async function mount(root) {
   canvasEl = document.createElement("canvas"); canvasEl.width = 320; canvasEl.height = 240;
   const pip = PipFrame({ video: videoEl, canvas: canvasEl, status: "tracking", confidence: 0 });
 
-  // B7: wire moment-capture globals so voice.js onCommand("save_moment") can call them
-  window.__saveMoment = async (session_id, step_num) => {
+  async function saveCurrentMoment() {
     if (!videoEl) return;
     const blob = await captureFrame(videoEl);
-    const id = await saveMoment(session_id, step_num, blob);
+    const id = await saveMoment(state.session_id, state.step_index, blob);
     state._momentsCount = (state._momentsCount || 0) + 1;
-    try {
-      await api.session.event(session_id, "moment_saved", { step_num, indexeddb_key: id, ts: Date.now() });
-    } catch {}
-    tts.enqueue(`Saved at step ${step_num + 1}.`);
-  };
-  window.__loadMoments = loadMoments;
+    try { await api.session.event(state.session_id, "moment_saved", { step_num: state.step_index, indexeddb_key: id, ts: Date.now() }); } catch {}
+    tts.enqueue(`Saved at step ${state.step_index + 1}.`);
+  }
 
   currentHud = Hud({ status: "tracking", active: null });
 
@@ -135,7 +131,7 @@ export async function mount(root) {
       if (action === "resume")  { stepTimer?.resume(); state.setIdle(false); refreshHud(); }
       if (action === "ambient_enter") state.go("ambient");
       if (action === "trainer") state.go("trainer");
-      if (action === "save_moment" && window.__saveMoment) window.__saveMoment(state.session_id, state.step_index);
+      if (action === "save_moment") saveCurrentMoment();
     },
     onQA: async (question) => {
       if (!state.recipes[state.recipe_index]) return;

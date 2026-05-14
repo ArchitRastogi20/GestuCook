@@ -26,6 +26,7 @@ const DEFAULTS = {
   cooldownMs:    1600,
   palmCooldownMs:600,
   idleMs:        3000,
+  holdMs:        1500,
   swipeWindow:   20,
   swipeThreshold:0.18,
   swipeMinMs:    120,
@@ -56,6 +57,10 @@ export const GestureEngine = (() => {
   let lastFireClass = null;
   let lastSeenHandAt = 0;
   let idleEmitted = false;
+
+  // palm hold state (B3: sticky step)
+  let palmHoldStart = 0;
+  let palmHoldFired = false;
 
   // swipe state
   let wristHistory = [];
@@ -99,6 +104,7 @@ export const GestureEngine = (() => {
 
   function _reset() {
     cand = null; candCount = 0; wristHistory = []; swipeLocked = false; idleEmitted = false;
+    palmHoldStart = 0; palmHoldFired = false;
   }
 
   async function _loop() {
@@ -162,6 +168,18 @@ export const GestureEngine = (() => {
     } else {
       cand = null; candCount = 0;
     }
+
+    // detect Open_Palm held for holdMs (B3: sticky step lock)
+    if (passes && action === "Open_Palm") {
+      if (palmHoldStart === 0) palmHoldStart = now;
+      if (!palmHoldFired && now - palmHoldStart >= cfg.holdMs) {
+        palmHoldFired = true;
+        _fire("open_palm_hold", now, "hold", top.score);
+      }
+    } else {
+      palmHoldStart = 0;
+      palmHoldFired = false;
+    }
   }
 
   function _fire(actionName, now, source, score) {
@@ -203,12 +221,13 @@ export const GestureEngine = (() => {
   }
 
   // test surface
-  function __forTest({ onGesture: cb, confidence, confirmFrames, cooldownMs, idleMs } = {}) {
+  function __forTest({ onGesture: cb, confidence, confirmFrames, cooldownMs, idleMs, holdMs } = {}) {
     onGesture = cb;
     if (confidence)   cfg.confidence    = { ...cfg.confidence, ...confidence };
     if (confirmFrames) cfg.confirmFrames = { ...cfg.confirmFrames, ...confirmFrames };
-    if (cooldownMs   != null) cfg.cooldownMs = cooldownMs;
-    if (idleMs       != null) cfg.idleMs     = idleMs;
+    if (cooldownMs != null) cfg.cooldownMs = cooldownMs;
+    if (idleMs     != null) cfg.idleMs     = idleMs;
+    if (holdMs     != null) cfg.holdMs     = holdMs;
     _reset(); lastFireAt = 0;
     return { _tick };
   }

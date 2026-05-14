@@ -81,10 +81,6 @@ def enrich_recipes(recipes):
 @app.on_event("startup")
 async def on_startup():
     await ensure_indexes()
-
-
-@app.on_event("startup")
-def startup_check():
     logger.info("=== GestuCook Backend Starting ===")
     logger.info("LLM_PROVIDER = %s", LLM_PROVIDER)
     if LLM_PROVIDER == "openai":

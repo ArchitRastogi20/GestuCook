@@ -1,0 +1,76 @@
+/* Design tokens. Single source of truth for color, type, spacing, motion. */
+
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/static/fonts/fraunces-variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Fraunces';
+  src: url('/static/fonts/fraunces-variable-italic.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist';
+  src: url('/static/fonts/geist-variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Geist Mono';
+  src: url('/static/fonts/geist-mono-variable.woff2') format('woff2-variations');
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  /* color — OKLCH, no pure #000 or #fff */
+  --bg:        oklch(0.972 0.012 78);
+  --bg-2:      oklch(0.945 0.018 78);
+  --paper:     oklch(0.985 0.008 80);
+  --ink:       oklch(0.265 0.018 60);
+  --ink-2:     oklch(0.46 0.022 64);
+  --ink-3:     oklch(0.62 0.022 70);
+  --rule:      oklch(0.86 0.02 75);
+  --hairline:  rgba(125,95,55,0.16);
+  --copper:    oklch(0.60 0.115 52);
+  --copper-2:  oklch(0.70 0.090 56);
+  --sage:      oklch(0.66 0.046 142);
+  --shell:     rgba(125,95,55,0.045);
+
+  /* shadows */
+  --inset-hi:  inset 0 1px 0 rgba(255,252,244,0.9);
+  --shadow-amb: 0 30px 60px -30px rgba(60,38,12,0.18),
+                0 8px 24px -8px rgba(60,38,12,0.08);
+  --shadow-soft: 0 10px 30px -16px rgba(60,38,12,0.10);
+
+  /* motion */
+  --t-spring: 700ms cubic-bezier(0.32, 0.72, 0, 1);
+  --t-quart:  500ms cubic-bezier(0.25, 1, 0.5, 1);
+
+  /* shape */
+  --r-outer: 28px;
+  --r-inner: 22px;
+  --r-pill:  999px;
+  --r-sm:    13px;
+
+  /* spacing */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 36px;
+  --space-7: 56px;
+
+  /* fonts */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-body:    'Geist', system-ui, sans-serif;
+  --font-mono:    'Geist Mono', ui-monospace, monospace;
+}

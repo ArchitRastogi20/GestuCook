@@ -6,6 +6,7 @@ import { TTSQueue, Timer } from "../audio.js";
 import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
 import { VoiceLoop } from "../voice.js";
+import { saveMoment, loadMoments, captureFrame } from "../moments.js";
 
 const tts = new TTSQueue();
 let videoEl, canvasEl, currentHud;
@@ -63,6 +64,19 @@ export async function mount(root) {
   videoEl  = document.createElement("video"); videoEl.playsInline = true; videoEl.muted = true;
   canvasEl = document.createElement("canvas"); canvasEl.width = 320; canvasEl.height = 240;
   const pip = PipFrame({ video: videoEl, canvas: canvasEl, status: "tracking", confidence: 0 });
+
+  // B7: wire moment-capture globals so voice.js onCommand("save_moment") can call them
+  window.__saveMoment = async (session_id, step_num) => {
+    if (!videoEl) return;
+    const blob = await captureFrame(videoEl);
+    const id = await saveMoment(session_id, step_num, blob);
+    state._momentsCount = (state._momentsCount || 0) + 1;
+    try {
+      await api.session.event(session_id, "moment_saved", { step_num, indexeddb_key: id, ts: Date.now() });
+    } catch {}
+    tts.enqueue(`Saved at step ${step_num + 1}.`);
+  };
+  window.__loadMoments = loadMoments;
 
   currentHud = Hud({ status: "tracking", active: null });
 

@@ -19,3 +19,40 @@ main { flex: 1; padding: var(--space-5); max-width: 1120px; margin: 0 auto; widt
 .welcome-input:focus { border-color: var(--copper); }
 .welcome-input::placeholder { color: var(--ink-3); }
 .welcome-actions { margin-top: var(--space-5); display: flex; gap: var(--space-3); align-items: center; }
+
+/* mode pick */
+.mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5); max-width: 720px; margin: var(--space-6) auto; }
+.mode-grid .bezel .core { padding: var(--space-6) var(--space-5); text-align: center; cursor: pointer; }
+.mode-grid .bezel:hover { transform: translateY(-2px); }
+.mode-card-icon { width: 36px; height: 36px; margin: 0 auto var(--space-3); color: var(--copper); }
+.mode-card h3 { font-family: var(--font-display); font-variation-settings: "opsz" 96; font-size: 22px; font-weight: 400; letter-spacing: -0.02em; margin-bottom: 6px; }
+.mode-card p { color: var(--ink-2); font-size: 13.5px; line-height: 1.55; max-width: 28ch; margin: 0 auto; }
+
+/* photo upload */
+.upload-zone { padding: var(--space-7) var(--space-5); text-align: center; cursor: pointer; }
+.upload-zone:hover, .upload-zone.dragover { background: var(--shell); }
+.upload-zone .icon { width: 36px; height: 36px; color: var(--copper); margin: 0 auto var(--space-3); }
+.upload-zone p { color: var(--ink-2); font-size: 14px; }
+.thumb-strip { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-4); }
+.thumb-strip img { width: 72px; height: 72px; object-fit: cover; border-radius: var(--r-sm); border: 1px solid var(--hairline); }
+.chip-group { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: var(--space-5) 0; justify-content: center; }
+.chip-group .chip { cursor: pointer; transition: color var(--t-quart), border-color var(--t-quart); }
+.chip-group .chip.on { color: var(--copper); border-color: oklch(0.60 0.115 52 / 0.40); }
+
+/* hands-free voice */
+.voice-area { text-align: center; padding: var(--space-6); }
+.mic-btn { width: 96px; height: 96px; border-radius: var(--r-pill);
+  background: var(--shell); border: 1px solid var(--hairline); cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--copper);
+  transition: transform var(--t-spring), background var(--t-spring);
+}
+.mic-btn:hover { transform: translateY(-2px); }
+.mic-btn.recording { background: var(--copper); color: var(--paper); animation: micPulse 1.2s var(--t-quart) infinite; }
+@keyframes micPulse {
+  0% { box-shadow: 0 0 0 0 oklch(0.60 0.115 52 / 0.35); }
+  70%{ box-shadow: 0 0 0 24px oklch(0.60 0.115 52 / 0); }
+  100%{box-shadow: 0 0 0 0 oklch(0.60 0.115 52 / 0); }
+}
+.voice-transcript { margin-top: var(--space-5); color: var(--ink-2); font-style: italic; min-height: 1.5em; }
+.ingredients-list { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: center; margin-top: var(--space-4); }

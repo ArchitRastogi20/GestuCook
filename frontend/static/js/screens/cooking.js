@@ -237,16 +237,20 @@ async function mountParallel(root) {
     const cur = schedule[cursor];
     laneA.classList.toggle("active", cur?.recipe === "A");
     laneB.classList.toggle("active", cur?.recipe === "B");
-    laneA.querySelector(".step").textContent = (A.steps || []).map(s => typeof s === "string" ? s : s.text).filter((_, i) => {
-      const aSteps = schedule.filter(s => s.recipe === "A");
-      const idx = aSteps.findIndex(s => s.idx === i);
-      return idx === aSteps.slice(0, schedule.slice(0, cursor + 1).filter(s => s.recipe === "A").length).length - 1;
-    })[0] || "ready";
-    laneB.querySelector(".step").textContent = (B.steps || []).map(s => typeof s === "string" ? s : s.text).filter((_, i) => {
-      const bSteps = schedule.filter(s => s.recipe === "B");
-      const idx = bSteps.findIndex(s => s.idx === i);
-      return idx === bSteps.slice(0, schedule.slice(0, cursor + 1).filter(s => s.recipe === "B").length).length - 1;
-    })[0] || "ready";
+
+    // last entry FROM THIS RECIPE at or before the cursor
+    const lastInLane = (recipe) => {
+      for (let i = cursor; i >= 0; i--) {
+        if (schedule[i].recipe === recipe) return schedule[i];
+      }
+      return null;
+    };
+    const lastA = lastInLane("A");
+    const lastB = lastInLane("B");
+
+    laneA.querySelector(".step").textContent = lastA?.text || "ready";
+    laneB.querySelector(".step").textContent = lastB?.text || "ready";
+
     if (cur) tts.enqueue(`${cur.recipe === "A" ? A.name : B.name}: ${cur.text}`);
   }
 

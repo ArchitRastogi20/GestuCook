@@ -1,7 +1,7 @@
 // frontend/static/sw.js
 // Caches big static assets so repeat loads are instant.
 
-const CACHE = "gestucook-v1";
+const CACHE = "gestucook-v2";
 const PRECACHE = [
   "/static/vendor/mediapipe/gesture_recognizer.task",
   "/static/vendor/mediapipe/vision_bundle.mjs",
@@ -21,7 +21,11 @@ self.addEventListener("install", (e) => {
 });
 
 self.addEventListener("activate", (e) => {
-  e.waitUntil(self.clients.claim());
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
 });
 
 self.addEventListener("fetch", (e) => {

@@ -1,4 +1,5 @@
 import os
+import re
 import json
 import base64
 import math
@@ -13,11 +14,16 @@ from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from typing import Optional
 from PIL import Image
+from db import ensure_indexes
+from routes_session import router as session_router
+from routes_qa import router as qa_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("gestucook")
 
 app = FastAPI(title="GestuCook API")
+app.include_router(session_router)
+app.include_router(qa_router)
 
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openrouter")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
@@ -30,8 +36,51 @@ TTS_URL = os.getenv("TTS_URL", "http://tts-service:8002")
 TOKENIZER = tiktoken.get_encoding("o200k_base")
 
 
+# ── step duration helpers ─────────────────────────────────────
+
+_DUR_RE = re.compile(r"""
+    (?:for\s+|about\s+|~|approximately\s+)?
+    (\d{1,3})\s*
+    (s|sec|secs|second|seconds|m|min|mins|minute|minutes|hr|hrs|hour|hours)\b
+""", re.I | re.X)
+
+
+def parse_step_duration(text: str):
+    if not text:
+        return None
+    m = _DUR_RE.search(text)
+    if not m:
+        return None
+    n = int(m.group(1))
+    unit = m.group(2).lower()
+    if unit.startswith("s") and not unit.startswith("se"):
+        return n
+    if unit.startswith("se"):
+        return n
+    if unit.startswith("m"):
+        return n * 60
+    if unit.startswith("h"):
+        return n * 3600
+    return None
+
+
+def enrich_recipes(recipes):
+    for r in recipes.get("recipes", recipes if isinstance(recipes, list) else []):
+        steps = r.get("steps", [])
+        new_steps = []
+        for s in steps:
+            if isinstance(s, str):
+                new_steps.append({"text": s, "duration_seconds": parse_step_duration(s)})
+            else:
+                s.setdefault("duration_seconds", parse_step_duration(s.get("text", "")))
+                new_steps.append(s)
+        r["steps"] = new_steps
+    return recipes
+
+
 @app.on_event("startup")
-def startup_check():
+async def on_startup():
+    await ensure_indexes()
     logger.info("=== GestuCook Backend Starting ===")
     logger.info("LLM_PROVIDER = %s", LLM_PROVIDER)
     if LLM_PROVIDER == "openai":
@@ -391,6 +440,9 @@ async def recipes(req: HandsFreeRequest):
         raise HTTPException(status_code=500, detail=f"Recipe generation failed: {str(e)}")
 
     elapsed_ms = round((time.time() - start) * 1000)
+
+    # enrich steps with parsed duration_seconds
+    enrich_recipes(data)
 
     prompt_text = RECIPE_PROMPT_TEMPLATE.format(
         count=req.count or 3,

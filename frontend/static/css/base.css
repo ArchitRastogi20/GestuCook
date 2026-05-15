@@ -1,0 +1,83 @@
+@import url('tokens.css');
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { font-size: 16px; }
+
+body {
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* subtle, fixed film-grain — the only ambient effect we keep */
+body::before {
+  content: "";
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.035;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.95' numOctaves='3' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  background-size: 220px 220px;
+}
+
+/* type scale via utility classes used by screens */
+.t-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--copper);
+}
+.t-meta {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.10em;
+  color: var(--ink-2);
+}
+.t-display-xl {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+  font-weight: 400;
+  font-size: clamp(56px, 7vw, 88px);
+  line-height: 0.95;
+  letter-spacing: -0.028em;
+}
+.t-display-l {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 144, "SOFT" 100;
+  font-weight: 400;
+  font-size: 40px;
+  line-height: 1.02;
+  letter-spacing: -0.022em;
+}
+.t-display-m {
+  font-family: var(--font-display);
+  font-variation-settings: "opsz" 96, "SOFT" 80;
+  font-weight: 400;
+  font-size: 22px;
+  line-height: 1.05;
+  letter-spacing: -0.018em;
+}
+.t-body { font-size: 14.5px; color: var(--ink-2); max-width: 65ch; }
+.t-body b { color: var(--ink); font-weight: 500; }
+
+.italic { font-style: italic; color: var(--copper); font-weight: 300; }
+
+/* utility */
+.hidden { display: none !important; }
+.screen { display: none; }
+.screen.active { display: block; animation: enter 700ms cubic-bezier(0.32, 0.72, 0, 1); }
+
+@keyframes enter {
+  from { opacity: 0; transform: translateY(16px); filter: blur(6px); }
+  to   { opacity: 1; transform: translateY(0);    filter: blur(0); }
+}

@@ -21,14 +21,25 @@ async function jsonGet(path) {
 
 export const api = {
   // existing endpoints (unchanged)
-  detectIngredients(files, cuisine) {
+  detectIngredientsFromFile(file) {
     const fd = new FormData();
-    for (const f of files) fd.append("images", f);
-    if (cuisine) fd.append("cuisine", cuisine);
-    return fetch(`${BASE}/detect`, { method: "POST", body: fd }).then(r => r.json());
+    fd.append("image", file);
+    return fetch(`${BASE}/detect`, { method: "POST", body: fd }).then(async r => {
+      if (!r.ok) throw new Error(`/detect ${r.status}`);
+      return r.json();
+    });
+  },
+  async detectIngredients(files, _cuisineIgnored) {
+    const all = [];
+    for (const f of files) {
+      const det = await api.detectIngredientsFromFile(f);
+      if (Array.isArray(det?.items)) all.push(...det.items);
+    }
+    return { ingredients: [...new Set(all.map(s => String(s).trim()).filter(Boolean))] };
   },
   generateRecipes(ingredients, cuisine) {
-    return jsonPost("/recipes", { ingredients, cuisine });
+    const cuisines = cuisine ? [cuisine] : null;
+    return jsonPost("/recipes", { ingredients, cuisines });
   },
   transcribe(blob) {
     const fd = new FormData();

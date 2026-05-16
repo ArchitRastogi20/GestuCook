@@ -215,3 +215,56 @@
 }
 .cascade .peek.next  { transform: rotate(1.2deg) translateX(8px); }
 .cascade .peek.prev  { transform: rotate(-1.4deg) translateX(-6px); opacity: 0.92; }
+
+/* -- RequestStatus (sent / generating / failed) ───────────────────── */
+.req-status {
+  display: none; align-items: center; gap: var(--space-3);
+  width: fit-content; margin: var(--space-4) auto 0;
+  padding: 9px 18px 9px 11px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  background: var(--paper);
+  box-shadow: var(--shadow-soft);
+  opacity: 0; transform: translateY(8px) scale(0.98);
+  transition: opacity 0.45s var(--t-quart), transform 0.45s var(--t-quart);
+}
+.req-status.show { opacity: 1; transform: none; }
+
+.req-glyph { width: 28px; height: 28px; flex: none; }
+.req-glyph circle, .req-glyph path {
+  fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.req-ring-bg { stroke: var(--hairline); }
+.req-ring    { stroke: var(--copper); }
+.req-tick    { stroke: var(--copper); }
+.req-cross   { stroke: oklch(0.56 0.13 35); opacity: 0; }
+
+.req-status.sent .req-ring { animation: req-draw-ring 0.55s var(--t-quart) forwards; }
+.req-status.sent .req-tick { animation: req-draw-tick 0.40s var(--t-quart) 0.42s forwards; }
+@keyframes req-draw-ring { to { stroke-dashoffset: 0; } }
+@keyframes req-draw-tick { to { stroke-dashoffset: 0; } }
+
+.req-status.error .req-ring-bg,
+.req-status.error .req-ring  { stroke: oklch(0.56 0.13 35); animation: none; stroke-dashoffset: 0; }
+.req-status.error .req-tick  { animation: none; opacity: 0; }
+.req-status.error .req-cross { opacity: 1; transition: opacity 0.3s var(--t-quart); }
+
+.req-text  { display: flex; flex-direction: column; gap: 1px; text-align: left; }
+.req-title {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ink);
+}
+.req-status.error .req-title { color: oklch(0.56 0.13 35); }
+.req-sub   { font-size: 13px; color: var(--ink-3); line-height: 1.35; }
+
+.req-dots  { display: none; gap: 4px; align-items: center; height: 8px; margin-top: 3px; }
+.req-status.working .req-dots { display: inline-flex; }
+.req-dots i {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: var(--copper); opacity: 0.3;
+  animation: req-dot 1.1s var(--t-quart) infinite;
+}
+.req-dots i:nth-child(2) { animation-delay: 0.15s; }
+.req-dots i:nth-child(3) { animation-delay: 0.30s; }
+@keyframes req-dot { 0%, 100% { opacity: 0.25; transform: translateY(0); }
+                     40%      { opacity: 0.95; transform: translateY(-2px); } }

@@ -37,6 +37,24 @@ export function Button({ label, intent = "primary", trailingIcon = null, onClick
   return b;
 }
 
+// Toggle a button into a loading state: relabel it, disable it, mark it.
+// Prevents double-submits and gives the user feedback during slow API calls.
+export function setLoading(btn, on, label) {
+  if (!btn) return;
+  const span = btn.querySelector("span");
+  if (on) {
+    if (span && !btn.dataset.label) btn.dataset.label = span.textContent;
+    if (span && label) span.textContent = label;
+    btn.disabled = true;
+    btn.classList.add("is-loading");
+  } else {
+    if (span && btn.dataset.label) span.textContent = btn.dataset.label;
+    delete btn.dataset.label;
+    btn.disabled = false;
+    btn.classList.remove("is-loading");
+  }
+}
+
 export function Eyebrow({ text = "" } = {}) {
   return el("div", { cls: "eyebrow" }, [
     el("span", { cls: "dot" }),

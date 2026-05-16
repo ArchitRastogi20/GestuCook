@@ -1,14 +1,24 @@
 // frontend/static/js/screens/ambient.js
+// Kitchen mode: huge step text, webcam hidden. mount() sets up camera, mic and
+// the step display once; stepping only re-renders text.
 import { state } from "../state.js";
 import { Hud, highlightHudGesture } from "../ui/components.js";
 import { GestureEngine } from "../gestures.js";
-import { TTSQueue } from "../audio.js";
+import { tts } from "../audio.js";
 import { VoiceLoop } from "../voice.js";
 import { enter } from "../ui/motion.js";
+import { commands } from "../commands.js";
 
-const tts = new TTSQueue();
+const GESTURE_ACTION = {
+  swipe_right: "next", thumbs_up: "next", swipe_left: "back",
+  pointing_up: "exit", fist: "exit",
+};
+const VOICE_ACTION = {
+  next: "next", back: "back", repeat: "read", ambient_exit: "exit",
+};
+
 let voice = null;
-let video, canvas;
+let unbindTTS = null;
 
 export async function mount(root) {
   root.innerHTML = "";
@@ -16,54 +26,68 @@ export async function mount(root) {
   const r = state.recipes[state.recipe_index];
   if (!r) { state.go("recipes"); return; }
   const steps = r.steps || [];
-  const i = state.step_index = Math.min(state.step_index, steps.length - 1);
 
   const wrap = document.createElement("div");
   wrap.className = "ambient";
+  const step = document.createElement("div"); step.className = "step";
+  const meta = document.createElement("div"); meta.className = "meta";
+  const video  = document.createElement("video"); video.style.display = "none"; video.playsInline = true; video.muted = true;
+  const canvas = document.createElement("canvas"); canvas.style.display = "none"; canvas.width = 320; canvas.height = 240;
+  wrap.append(step, meta, video, canvas);
 
-  const stepText = typeof steps[i] === "string" ? steps[i] : (steps[i]?.text || "");
-  const step = document.createElement("div");
-  step.className = "step";
-  step.textContent = stepText;
-
-  const meta = document.createElement("div");
-  meta.className = "meta";
-  meta.textContent = `step ${i+1} of ${steps.length}  ·  kitchen mode`;
-
-  wrap.append(step, meta);
-
-  // hidden video/canvas for gesture engine
-  video = document.createElement("video"); video.style.display = "none"; video.playsInline = true; video.muted = true;
-  canvas = document.createElement("canvas"); canvas.style.display = "none"; canvas.width = 320; canvas.height = 240;
-  wrap.append(video, canvas);
-
-  const hud = Hud({ status: "tracking", active: null });
+  let hud = Hud({ status: "tracking", active: null });
   root.append(wrap, hud);
   enter(wrap);
 
-  await GestureEngine.init(video, canvas, onGesture);
-  GestureEngine.start();
+  const stepTextOf = (i) => {
+    const s = steps[i];
+    return typeof s === "string" ? s : (s?.text || "");
+  };
 
-  voice = new VoiceLoop({
-    onCommand: (action) => {
-      if (action === "ambient_exit") { state.go("cooking"); return; }
-      if (action === "next")  next();
-      if (action === "back")  prev();
-      if (action === "repeat") tts.enqueue(stepText);
-    },
-  });
-  voice.start();
-  tts.enqueue(stepText);
+  function renderStep(speak = true) {
+    const i = state.step_index = Math.min(state.step_index, steps.length - 1);
+    step.textContent = stepTextOf(i);
+    meta.textContent = `step ${i + 1} of ${steps.length}  ·  kitchen mode`;
+    if (speak) tts.enqueue(stepTextOf(i));
+  }
+
+  function onAction(action) {
+    switch (action) {
+      case "next":
+        if (state.step_index + 1 >= steps.length) state.go("epilogue");
+        else { state.nextStep(); renderStep(); }
+        break;
+      case "back": state.prevStep(); renderStep(); break;
+      case "read": tts.enqueue(stepTextOf(state.step_index)); break;
+      case "exit": state.go("cooking"); break;
+    }
+  }
+  commands.bind(onAction);
 
   function onGesture(g) {
     highlightHudGesture(hud, g);
-    if (g === "swipe_right" || g === "thumbs_up") next();
-    if (g === "swipe_left")  prev();
-    if (g === "pointing_up") state.go("cooking");
-    if (g === "fist")        state.go("cooking");
+    const action = GESTURE_ACTION[g];
+    if (action) commands.dispatch(action, "gesture");
   }
-  function next() { if (i + 1 >= steps.length) state.go("epilogue"); else { state.nextStep(); mount(root); } }
-  function prev() { state.prevStep(); mount(root); }
+
+  await GestureEngine.stop();
+  await GestureEngine.init(video, canvas, onGesture);
+  await GestureEngine.start();
+
+  voice = new VoiceLoop({
+    onCommand: (a) => { const action = VOICE_ACTION[a]; if (action) commands.dispatch(action, "voice"); },
+  });
+  // mute the mic while narration plays, so the recogniser can't hear the speaker
+  unbindTTS = tts.onPlayingChange((isPlaying) => isPlaying ? voice.mute() : voice.unmute());
+  voice.start();
+
+  renderStep();
 }
 
-export function unmount() { GestureEngine.stop(); tts.stopAll(); voice?.stop(); }
+export function unmount() {
+  commands.unbind();
+  unbindTTS?.(); unbindTTS = null;
+  GestureEngine.stop();
+  tts.stopAll();
+  if (voice) { voice.stop(); voice = null; }
+}

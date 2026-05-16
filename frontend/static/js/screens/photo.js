@@ -1,5 +1,5 @@
 // frontend/static/js/screens/photo.js
-import { Bezel, Eyebrow, Button, Chip } from "../ui/components.js";
+import { Bezel, Eyebrow, Button, Chip, setLoading } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { enter } from "../ui/motion.js";
@@ -47,16 +47,34 @@ export function mount(root) {
     chipGroup.append(chip);
   }
 
+  const status = document.createElement("p");
+  status.className = "t-body";
+  status.style.cssText = "text-align:center; margin-top: var(--space-3); min-height: 1.3em; color: var(--ink-3);";
+
   let files = [];
   const detectBtn = Button({
     label: "Detect & get recipes",
     trailingIcon: "arrowRight",
     onClick: async () => {
-      if (!files.length) return;
-      const det = await api.detectIngredients(files, selectedCuisine);
-      const recipes = await api.generateRecipes(det.ingredients, selectedCuisine);
-      state.setRecipes(recipes.recipes || recipes);
-      state.go("recipes");
+      if (!files.length || detectBtn.disabled) return;
+      setLoading(detectBtn, true, "Detecting…");
+      status.textContent = "Detecting ingredients from your photos…";
+      try {
+        const det = await api.detectIngredients(files, selectedCuisine);
+        if (!det.ingredients.length) {
+          setLoading(detectBtn, false);
+          status.textContent = "No ingredients detected — try clearer or closer photos.";
+          return;
+        }
+        setLoading(detectBtn, true, "Generating recipes…");
+        status.textContent = `Found ${det.ingredients.length} ingredient(s). Generating recipes — this can take a few seconds.`;
+        const recipes = await api.generateRecipes(det.ingredients, selectedCuisine);
+        state.setRecipes(recipes.recipes || recipes);
+        state.go("recipes");
+      } catch (e) {
+        setLoading(detectBtn, false);
+        status.textContent = "Couldn't detect or generate. Check the backend is running, then try again.";
+      }
     },
   });
   detectBtn.disabled = true;
@@ -89,7 +107,7 @@ export function mount(root) {
   }
 
   const wrap = document.createElement("div");
-  wrap.append(eyebrow, h2, sub, zone, fileInput, thumbs, document.createTextNode(""), chipGroup, actions);
+  wrap.append(eyebrow, h2, sub, zone, fileInput, thumbs, document.createTextNode(""), chipGroup, actions, status);
   root.append(wrap);
   enter(wrap);
 }

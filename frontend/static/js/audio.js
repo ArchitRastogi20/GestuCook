@@ -56,6 +56,10 @@ export class TTSQueue {
   }
 }
 
+// One shared queue for the WHOLE app. Every screen imports this same instance,
+// so it is physically impossible for two clips to play at once.
+export const tts = new TTSQueue();
+
 export class Timer {
   constructor({ seconds, onTick = () => {}, onDone = () => {} }) {
     this.total = seconds;

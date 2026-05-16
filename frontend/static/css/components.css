@@ -58,6 +58,9 @@
 .btn:hover { transform: translateY(-1px); }
 .btn:active { transform: scale(0.98); }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.btn.is-loading { animation: btn-pulse 1.1s ease-in-out infinite; }
+.btn.is-loading:disabled { opacity: 0.7; }
+@keyframes btn-pulse { 0%, 100% { opacity: 0.7; } 50% { opacity: 0.4; } }
 .btn .nest {
   width: 32px; height: 32px; border-radius: var(--r-pill);
   background: oklch(0.42 0.030 60);

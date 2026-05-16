@@ -2,11 +2,9 @@
 import { Eyebrow, Button } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
-import { TTSQueue } from "../audio.js";
+import { tts } from "../audio.js";
 import { enter } from "../ui/motion.js";
 import { loadMoments } from "../moments.js";
-
-const tts = new TTSQueue();
 
 export async function mount(root) {
   root.innerHTML = "";

@@ -1,5 +1,5 @@
 // frontend/static/js/screens/handsfree.js
-import { Bezel, Eyebrow, Button, Chip, setLoading } from "../ui/components.js";
+import { Bezel, Eyebrow, Button, Chip, setLoading, RequestStatus } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { enter } from "../ui/motion.js";
@@ -33,24 +33,22 @@ export function mount(root) {
 
   let detected = [];
 
-  const status = document.createElement("p");
-  status.className = "t-body";
-  status.style.cssText = "text-align:center; margin-top: var(--space-3); min-height: 1.3em; color: var(--ink-3);";
+  const reqStatus = RequestStatus();
 
   const goBtn = Button({
     label: "Generate recipes",
     trailingIcon: "arrowRight",
     onClick: async () => {
       if (!detected.length || goBtn.disabled) return;
-      setLoading(goBtn, true, "Generating recipes…");
-      status.textContent = "Asking the kitchen for recipes — this can take a few seconds.";
+      setLoading(goBtn, true, "Generating…");
+      reqStatus.send("Recipe request sent", "Generating your recipes — this can take a few seconds.");
       try {
         const recipes = await api.generateRecipes(detected, null);
         state.setRecipes(recipes.recipes || recipes);
         state.go("recipes");
       } catch (e) {
         setLoading(goBtn, false);
-        status.textContent = "Couldn't generate recipes. Check the backend is running, then try again.";
+        reqStatus.fail("Request failed", "Couldn't reach the kitchen. Check the backend is running, then try again.");
       }
     },
   });
@@ -93,7 +91,7 @@ export function mount(root) {
   voiceWrap.append(mic, transcript, ingredientsList);
 
   const wrap = document.createElement("div");
-  wrap.append(eyebrow, h2, sub, Bezel({ children: [voiceWrap] }), actions, status);
+  wrap.append(eyebrow, h2, sub, Bezel({ children: [voiceWrap] }), actions, reqStatus.el);
   root.append(wrap);
   enter(wrap);
 }

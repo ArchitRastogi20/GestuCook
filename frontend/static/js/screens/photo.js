@@ -1,5 +1,5 @@
 // frontend/static/js/screens/photo.js
-import { Bezel, Eyebrow, Button, Chip, setLoading } from "../ui/components.js";
+import { Bezel, Eyebrow, Button, Chip, setLoading, RequestStatus } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { enter } from "../ui/motion.js";
@@ -47,9 +47,7 @@ export function mount(root) {
     chipGroup.append(chip);
   }
 
-  const status = document.createElement("p");
-  status.className = "t-body";
-  status.style.cssText = "text-align:center; margin-top: var(--space-3); min-height: 1.3em; color: var(--ink-3);";
+  const reqStatus = RequestStatus();
 
   let files = [];
   const detectBtn = Button({
@@ -58,22 +56,22 @@ export function mount(root) {
     onClick: async () => {
       if (!files.length || detectBtn.disabled) return;
       setLoading(detectBtn, true, "Detecting…");
-      status.textContent = "Detecting ingredients from your photos…";
+      reqStatus.send("Request sent", "Detecting ingredients from your photos…");
       try {
         const det = await api.detectIngredients(files, selectedCuisine);
         if (!det.ingredients.length) {
           setLoading(detectBtn, false);
-          status.textContent = "No ingredients detected — try clearer or closer photos.";
+          reqStatus.fail("Nothing detected", "No ingredients found — try clearer or closer photos.");
           return;
         }
-        setLoading(detectBtn, true, "Generating recipes…");
-        status.textContent = `Found ${det.ingredients.length} ingredient(s). Generating recipes — this can take a few seconds.`;
+        setLoading(detectBtn, true, "Generating…");
+        reqStatus.update(`Found ${det.ingredients.length} ingredient(s). Generating recipes — this can take a few seconds.`);
         const recipes = await api.generateRecipes(det.ingredients, selectedCuisine);
         state.setRecipes(recipes.recipes || recipes);
         state.go("recipes");
       } catch (e) {
         setLoading(detectBtn, false);
-        status.textContent = "Couldn't detect or generate. Check the backend is running, then try again.";
+        reqStatus.fail("Request failed", "Couldn't detect or generate. Check the backend is running, then try again.");
       }
     },
   });
@@ -107,7 +105,7 @@ export function mount(root) {
   }
 
   const wrap = document.createElement("div");
-  wrap.append(eyebrow, h2, sub, zone, fileInput, thumbs, document.createTextNode(""), chipGroup, actions, status);
+  wrap.append(eyebrow, h2, sub, zone, fileInput, thumbs, document.createTextNode(""), chipGroup, actions, reqStatus.el);
   root.append(wrap);
   enter(wrap);
 }

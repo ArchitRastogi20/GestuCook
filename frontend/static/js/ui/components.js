@@ -55,6 +55,47 @@ export function setLoading(btn, on, label) {
   }
 }
 
+// Request-status confirmation. A stroke-drawn ring + checkmark animates in the
+// moment a request is fired ("sent"), then carries the working sub-text, then
+// flips to a cross on failure. Returns the element plus a tiny controller.
+export function RequestStatus() {
+  const root = el("div", { cls: "req-status", attrs: { role: "status", "aria-live": "polite" } });
+  root.innerHTML = `
+    <svg class="req-glyph" viewBox="0 0 28 28" aria-hidden="true">
+      <circle class="req-ring-bg" cx="14" cy="14" r="10"></circle>
+      <circle class="req-ring" cx="14" cy="14" r="10" transform="rotate(-90 14 14)"
+              stroke-dasharray="63" stroke-dashoffset="63"></circle>
+      <path class="req-tick" d="M8.8 14.4 l3.4 3.4 L19.6 9.8"
+            stroke-dasharray="17" stroke-dashoffset="17"></path>
+      <path class="req-cross" d="M10 10 L18 18 M18 10 L10 18"></path>
+    </svg>
+    <span class="req-text">
+      <span class="req-title"></span>
+      <span class="req-sub"></span>
+      <span class="req-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+    </span>`;
+  const title = root.querySelector(".req-title");
+  const sub   = root.querySelector(".req-sub");
+  return {
+    el: root,
+    // request fired -- play the checkmark draw-in
+    send(t = "Request sent", s = "") {
+      root.classList.remove("error", "sent");
+      root.style.display = "flex";
+      void root.offsetWidth;                       // restart the draw animation
+      root.classList.add("show", "sent", "working");
+      title.textContent = t; sub.textContent = s;
+    },
+    update(s) { sub.textContent = s; },            // advance the working sub-text
+    fail(t = "Something went wrong", s = "") {
+      root.style.display = "flex";
+      root.classList.remove("working");
+      root.classList.add("show", "error");
+      title.textContent = t; sub.textContent = s;
+    },
+  };
+}
+
 export function Eyebrow({ text = "" } = {}) {
   return el("div", { cls: "eyebrow" }, [
     el("span", { cls: "dot" }),

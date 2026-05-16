@@ -60,10 +60,11 @@ const DEFAULTS = {
   holdMs:         1200,    // open palm held this long -> "open_palm_hold"
 
   // Swipe (wrist-trajectory) layer.
-  swipeWindow:    24,
-  swipeThreshold: 0.16,
-  swipeMinMs:     120,
-  swipeMaxMs:     600,
+  swipeThreshold: 0.14,   // fraction of frame width the wrist must travel
+  swipeMinMs:      90,
+  swipeMaxMs:     550,    // also bounds how long the trajectory history is kept
+  swipeArmMs:     250,    // ignore swipes briefly after the hand (re)appears
+  moveThreshold:  0.09,   // wrist travel above this = moving (a swipe, not a held pose)
 };
 
 export const TO_ACTION = {
@@ -187,6 +188,7 @@ export const GestureEngine = (() => {
   let needRelease   = false;   // must relax to a neutral hand before firing again
 
   let lastSeenHandAt = 0;
+  let handArrivedAt = 0;
   let idleEmitted = false;
 
   // open-palm hold state
@@ -311,6 +313,7 @@ export const GestureEngine = (() => {
       return;
     }
 
+    if (now - lastSeenHandAt > 400) handArrivedAt = now;   // hand just (re)appeared
     lastSeenHandAt = now;
     idleEmitted = false;
 
@@ -338,6 +341,11 @@ export const GestureEngine = (() => {
         altLabel = g; altSince = now;          // brief blip -> just note it
       }
     }
+
+    // Wrist trajectory: tracked every frame. A moving hand is a swipe; a still
+    // hand is a held pose. They never collide -- a pose must be held still.
+    _trackWrist(lm[LM.WRIST].x, now);
+    if (_wristSpan() > cfg.moveThreshold) candSince = now;   // moving -> not "held"
 
     const held = candLabel ? now - candSince : 0;
     const confirmed = !!candLabel && held >= cfg.confirmMs;
@@ -369,13 +377,10 @@ export const GestureEngine = (() => {
     const cooldown = lastFireClass === "Open_Palm" ? cfg.palmCooldownMs : cfg.cooldownMs;
     if (now - lastFireAt < cooldown) return;
 
-    // Swipe layer: only attempt when the hand holds no recognised static pose.
-    if (g === "None") {
-      _trackWrist(lm[LM.WRIST].x, now);
+    // Swipe: a deliberate horizontal sweep, recognised in any hand pose.
+    if (now - handArrivedAt > cfg.swipeArmMs) {
       const swipe = _detectSwipe(now);
       if (swipe) { _fire(swipe, now, "swipe", 0); return; }
-    } else {
-      wristHistory = [];
     }
 
     // Open palm held long enough -> sticky step-lock toggle.
@@ -408,18 +413,30 @@ export const GestureEngine = (() => {
 
   function _trackWrist(x, t) {
     wristHistory.push({ x, t });
-    if (wristHistory.length > cfg.swipeWindow) wristHistory.shift();
+    // Keep only a recent TIME window. The old count-based window (24 samples)
+    // spanned >1.5 s at low CPU framerate, so every swipe was rejected for
+    // being "too slow". Pruning by time fixes that at any framerate.
+    const cutoff = t - cfg.swipeMaxMs;
+    while (wristHistory.length && wristHistory[0].t < cutoff) wristHistory.shift();
     // re-arm once the hand returns to the centre band after a swipe
     if (swipeLocked && x > 0.35 && x < 0.65) swipeLocked = false;
   }
 
+  // Total horizontal travel of the wrist across the tracked window.
+  function _wristSpan() {
+    if (wristHistory.length < 2) return 0;
+    let lo = Infinity, hi = -Infinity;
+    for (const p of wristHistory) { if (p.x < lo) lo = p.x; if (p.x > hi) hi = p.x; }
+    return hi - lo;
+  }
+
   function _detectSwipe(now) {
-    if (swipeLocked || wristHistory.length < 4) return null;
+    if (swipeLocked || wristHistory.length < 3) return null;
     const a = wristHistory[0];
     const b = wristHistory[wristHistory.length - 1];
     const dt = b.t - a.t;
     const dx = b.x - a.x;
-    if (dt < cfg.swipeMinMs || dt > cfg.swipeMaxMs) return null;
+    if (dt < cfg.swipeMinMs) return null;   // upper bound is guaranteed by time-pruned history
     // Display is CSS-mirrored, so a hand moving to the user's right travels in
     // -x in the raw frame -> swipe_right.
     if (dx >  cfg.swipeThreshold) { wristHistory = []; return "swipe_left";  }

@@ -1,13 +1,31 @@
 // frontend/static/js/screens/epilogue.js
-import { Eyebrow, Button } from "../ui/components.js";
+import { Eyebrow, Button, Skeleton } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { tts } from "../audio.js";
 import { enter } from "../ui/motion.js";
 import { loadMoments } from "../moments.js";
 
+// Placeholder layout shown while the session summary + moments load.
+function buildSkeleton() {
+  const wrap = document.createElement("div");
+  wrap.className = "epilogue-wrap";
+  const centred = (node, mb) => { node.style.margin = `0 auto ${mb}`; return node; };
+  wrap.append(
+    centred(Skeleton({ width: "170px", height: "13px", radius: "var(--r-pill)" }), "var(--space-5)"),
+    centred(Skeleton({ width: "min(440px, 82%)", height: "46px", radius: "12px" }), "var(--space-4)"),
+    centred(Skeleton({ width: "min(360px, 72%)", height: "18px", radius: "6px" }), "var(--space-6)"),
+  );
+  const sheet = document.createElement("div");
+  sheet.className = "epilogue-sheet";
+  for (let i = 0; i < 4; i++) sheet.append(Skeleton({ height: "118px", radius: "var(--r-sm)" }));
+  wrap.append(sheet);
+  return wrap;
+}
+
 export async function mount(root) {
   root.innerHTML = "";
+  root.append(buildSkeleton());   // shimmer while the async work below runs
 
   const r = state.recipes[state.recipe_index];
   const startedAt = state._epStartedAt || (state._epStartedAt = Date.now() - 60000);
@@ -66,10 +84,9 @@ export async function mount(root) {
   const wrap = document.createElement("div");
   wrap.className = "epilogue-wrap";
   wrap.append(eyebrow, h1, stat, sheet, cta);
-  root.append(wrap);
+  root.replaceChildren(wrap);
   enter(wrap);
 
-  // TTS narration
   tts.enqueue(`You cooked ${recipeTitle} in about ${durationMin} minutes. Used ${ingredientsCount} ingredients. Total cost ${costCents.toFixed(0)} cents. You've cooked ${monthCount} recipe${monthCount === 1 ? "" : "s"} this month.`);
 }
 

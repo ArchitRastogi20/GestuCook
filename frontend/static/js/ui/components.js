@@ -110,10 +110,30 @@ export function Chip({ label = "", variant = "default" } = {}) {
   return el("span", { cls, text: label });
 }
 
+// A plain shimmering placeholder block. Size it via the opts.
+export function Skeleton({ width = "100%", height = "1em", radius = "" } = {}) {
+  const s = el("div", { cls: "skeleton" });
+  s.style.width = width;
+  s.style.height = height;
+  if (radius) s.style.borderRadius = radius;
+  return s;
+}
+
 export function PipFrame({ video, canvas, status = "tracking", confidence = 0 } = {}) {
   const frame = el("div", { cls: "frame" });
   if (video) frame.appendChild(video);
   if (canvas) frame.appendChild(canvas);
+
+  // Skeleton shimmer until the camera stream is actually playing -- the webcam
+  // takes ~1s to start, and a black tile reads as "broken".
+  frame.appendChild(el("div", { cls: "pip-skeleton" }, [el("div", { cls: "pip-skeleton-icon" })]));
+  if (video) {
+    const live = () => frame.classList.add("pip-live");
+    if (video.readyState >= 3 && !video.paused) live();   // already streaming (re-render)
+    video.addEventListener("playing", live);
+    video.addEventListener("loadeddata", () => { if (!video.paused) live(); });
+  }
+
   const label = el("div", { cls: "label" }, [
     el("span", { cls: "live", text: status }),
     el("span", { text: confidence.toFixed(2) })

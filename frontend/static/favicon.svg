@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- GestuCook mark: the Double-Bezel motif framing a copper gesture aperture -->
+  <rect width="32" height="32" rx="7.5" fill="#26211c"/>
+  <rect x="4.5" y="4.5" width="23" height="23" rx="6" fill="#f3efe7"/>
+  <path d="M20.44 12.27 A5.8 5.8 0 1 0 20.44 19.73" fill="none"
+        stroke="#b07849" stroke-width="3" stroke-linecap="round"/>
+  <circle cx="16" cy="16" r="2.4" fill="#b07849"/>
+</svg>

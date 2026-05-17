@@ -37,12 +37,22 @@ state.on("cost", (c) => {
   el.innerHTML = `<b>$${c.usd.toFixed(4)}</b> · ${c.in} in / ${c.out} out`;
 });
 
-// provider badge
-api.costSnapshot().then(snap => {
+// provider badge -- retried through the backend's startup window. The backend
+// container needs a few seconds to accept connections; without this the first
+// /api/config call 502s and the badge is stuck on "loading" forever.
+(async function loadProviderBadge() {
   const el = document.querySelector("#provider-badge");
-  if (!el) return;
-  el.textContent = `${snap.provider || ""} · ${snap.model || ""}`.trim();
-}).catch(() => {});
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      const snap = await api.costSnapshot();
+      if (el) el.textContent = `${snap.provider || ""} · ${snap.model || ""}`.trim();
+      return;
+    } catch {
+      await new Promise(r => setTimeout(r, 700 * (attempt + 1)));
+    }
+  }
+  if (el) el.textContent = "offline";
+})();
 
 // service worker
 if ("serviceWorker" in navigator) {

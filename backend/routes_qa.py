@@ -1,5 +1,6 @@
 # backend/routes_qa.py
 import os
+import logging
 import httpx
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -7,6 +8,7 @@ import tiktoken
 from db import events
 
 router = APIRouter(prefix="/api", tags=["qa"])
+logger = logging.getLogger("gestucook")
 
 _QA_CLIENT = httpx.AsyncClient(timeout=30.0)
 
@@ -21,10 +23,17 @@ class QABody(BaseModel):
 PROVIDER = os.environ.get("LLM_PROVIDER", "openrouter").lower()
 
 PROMPT_TMPL = (
-    "Answer in at most 2 short sentences.\n"
+    "You are a concise cooking assistant. The user is cooking hands-free and asked a "
+    "question out loud. The text below came from an automatic speech recognizer and "
+    "may contain mis-heard or garbled words. Silently infer the most likely intended "
+    "question from the recipe context, then answer it.\n"
+    "If the text is too garbled to be a plausible cooking question, reply exactly: "
+    "Sorry, I didn't catch that - could you ask again?\n\n"
     "Recipe title: {title}\n"
     "Current step: {step}\n"
-    "Q: {q}\nA:"
+    "Voice transcription: {q}\n\n"
+    "Answer in at most 2 short sentences.\n"
+    "Answer:"
 )
 
 
@@ -64,16 +73,21 @@ async def qa(body: QABody):
     payload = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 80,
+        # GPT-5-class models (e.g. gpt-5.4-nano) require max_completion_tokens,
+        # not max_tokens -- main.py's recipe/detect calls already use this.
+        "max_completion_tokens": 256,
         "temperature": 0.3,
     }
     c = _QA_CLIENT
     r = await c.post(url, headers={"Authorization": f"Bearer {key}"}, json=payload)
     if r.status_code != 200:
-        raise HTTPException(502, "llm upstream error")
+        logger.error("QA LLM upstream %s: %s", r.status_code, r.text[:400])
+        raise HTTPException(502, f"llm upstream error ({r.status_code})")
     data = r.json()
 
-    text = data["choices"][0]["message"]["content"].strip()
+    text = (data["choices"][0]["message"].get("content") or "").strip()
+    if not text:
+        text = "Sorry, I didn't catch that - could you ask again?"
     n_out = len(enc.encode(text))
     cost = _cost(PROVIDER, model, n_in, n_out)
 

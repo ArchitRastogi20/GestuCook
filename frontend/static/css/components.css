@@ -305,3 +305,10 @@
   border: 2px solid oklch(0.56 0.04 60); position: relative; z-index: 1;
 }
 .frame.pip-live .pip-skeleton { opacity: 0; pointer-events: none; }
+
+/* -- ScreenHeader (section label + navigation control) ────────────── */
+.screen-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: var(--space-4); margin-bottom: var(--space-4);
+}
+.screen-header .eyebrow { margin-bottom: 0; }

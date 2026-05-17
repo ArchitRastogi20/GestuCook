@@ -1,2 +1,4 @@
 .env
 docs
+*.pptx
+*__pycache__

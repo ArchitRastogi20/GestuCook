@@ -1,5 +1,8 @@
 // frontend/static/js/voice.js
-// Always-on small ASR loop. Captures 3-second chunks, matches a tiny grammar.
+// Always-on small ASR loop. Captures 3-second chunks, matches a tiny command
+// grammar. Anything that isn't a command is treated as a spoken question --
+// there is NO wake word. The backend's Q&A prompt corrects garbled speech
+// recognition, so a misheard question still gets a sensible answer.
 //
 // Public:
 //   const v = new VoiceLoop({ onCommand(action, raw) {}, onQA(question){} })
@@ -19,8 +22,6 @@ const GRAMMAR = [
   { action: "save_moment",     patterns: [/^(save this|snapshot|moment|capture)$/i] },
 ];
 
-const QA_PREFIX = /^(hey\s*gestu|hey\s*gesture|ok\s*gestu)[\s,]*(.+)$/i;
-
 export function matchCommand(raw) {
   if (!raw) return null;
   const text = raw.toLowerCase().replace(/^(uhh|um|hmm|so)\s+/, "").trim();
@@ -28,11 +29,13 @@ export function matchCommand(raw) {
   return null;
 }
 
-export function matchQA(raw) {
-  if (!raw) return null;
-  const m = raw.match(QA_PREFIX);
-  if (!m) return null;
-  return { question: m[2].trim(), raw };
+// No wake word: any utterance that isn't a command is sent as a question.
+// We require at least two words so single-token ASR noise (Whisper transcribes
+// silence as stray words) doesn't fire an LLM call -- the backend then corrects
+// garbled transcriptions and rejects ones too implausible to be a question.
+export function looksLikeQuestion(raw) {
+  const words = (raw || "").replace(/[^\p{L}\p{N}\s]/gu, " ").trim().split(/\s+/).filter(Boolean);
+  return words.length >= 2;
 }
 
 export class VoiceLoop {
@@ -72,12 +75,10 @@ export class VoiceLoop {
         const res = await api.transcribe(blob);
         const text = (res?.text || "").trim();
         if (text) {
-          const qa = matchQA(text);
-          if (qa) this.onQA(qa.question, text);
-          else {
-            const cmd = matchCommand(text);
-            if (cmd) this.onCommand(cmd.action, text);
-          }
+          // Commands first; anything else is a spoken question (no wake word).
+          const cmd = matchCommand(text);
+          if (cmd) this.onCommand(cmd.action, text);
+          else if (looksLikeQuestion(text)) this.onQA(text, text);
         }
       } catch {}
       if (this.running) this._tick();

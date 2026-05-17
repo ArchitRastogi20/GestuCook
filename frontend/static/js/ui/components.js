@@ -103,6 +103,11 @@ export function Eyebrow({ text = "" } = {}) {
   ]);
 }
 
+// A header row pairing a section label (left) with a navigation control (right).
+export function ScreenHeader(left, right) {
+  return el("div", { cls: "screen-header" }, [left, right]);
+}
+
 export function Chip({ label = "", variant = "default" } = {}) {
   const cls = variant === "copper" ? "chip chip--copper"
             : variant === "sage"   ? "chip chip--sage"

@@ -2,7 +2,7 @@
 // Browse generated recipes. mount() starts the camera once; changing recipe
 // re-renders the page but REUSES the same <video>/<canvas>, so the webcam
 // stream is never interrupted. All input routes through the command arbiter.
-import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade, highlightHudGesture } from "../ui/components.js";
+import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade, ScreenHeader, highlightHudGesture } from "../ui/components.js";
 import { state } from "../state.js";
 import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
@@ -95,8 +95,13 @@ export async function mount(root) {
 
     const hud = Hud({ status: "tracking", active: null });
 
+    const header = ScreenHeader(
+      eyebrow,
+      Button({ label: "Home", intent: "ghost", onClick: () => commands.dispatch("home", "button") }),
+    );
+
     const wrap = document.createElement("div");
-    wrap.append(eyebrow, h1, lede, stage);
+    wrap.append(header, h1, lede, stage);
     root.replaceChildren(wrap, hud);
     enter(wrap);
     return hud;
@@ -138,6 +143,7 @@ export async function mount(root) {
         state.go("cooking");
         break;
       case "trainer": state.go("trainer"); break;
+      case "home":    state.go("welcome"); break;
       case "exit":    state.go("mode"); break;
     }
   }

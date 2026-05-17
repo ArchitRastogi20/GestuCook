@@ -7,7 +7,7 @@
 //
 // Every input -- gesture, voice, button -- routes through commands.dispatch(),
 // so one intent produces exactly one action.
-import { Bezel, Eyebrow, Button, PipFrame, Hud, highlightHudGesture } from "../ui/components.js";
+import { Bezel, Eyebrow, Button, PipFrame, Hud, ScreenHeader, highlightHudGesture } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { tts, Timer } from "../audio.js";
@@ -66,7 +66,6 @@ export async function mount(root) {
     Button({ label: "Read aloud", intent: "ghost", onClick: () => commands.dispatch("read", "button") }),
     Button({ label: "Previous",   intent: "ghost", onClick: () => commands.dispatch("back", "button") }),
     Button({ label: "Next step",  trailingIcon: "arrowRight", onClick: () => commands.dispatch("next", "button") }),
-    Button({ label: "Exit",       intent: "ghost", onClick: () => commands.dispatch("exit", "button") }),
   );
 
   const videoEl  = document.createElement("video"); videoEl.playsInline = true; videoEl.muted = true;
@@ -75,9 +74,14 @@ export async function mount(root) {
 
   let currentHud = Hud({ status: "tracking", active: null });
 
+  const header = ScreenHeader(
+    eyebrow,
+    Button({ label: "Back to recipes", intent: "ghost", onClick: () => commands.dispatch("exit", "button") }),
+  );
+
   const wrap = document.createElement("div");
   wrap.className = "cooking-wrap";
-  wrap.append(eyebrow, progress, card, cta, pip);
+  wrap.append(header, progress, card, cta, pip);
   root.append(wrap, currentHud);
   enter(wrap);
 
@@ -220,8 +224,12 @@ async function mountParallel(root) {
   stage.append(laneA, laneB);
 
   const hud = Hud({ status: "tracking", active: null });
+  const header = ScreenHeader(
+    eyebrow,
+    Button({ label: "Back to recipes", intent: "ghost", onClick: () => commands.dispatch("exit", "button") }),
+  );
   const wrap = document.createElement("div"); wrap.className = "cooking-wrap";
-  wrap.append(eyebrow, stage);
+  wrap.append(header, stage);
   root.append(wrap, hud);
   enter(wrap);
 

@@ -7,7 +7,7 @@
 //
 // Every input -- gesture, voice, button -- routes through commands.dispatch(),
 // so one intent produces exactly one action.
-import { Bezel, Eyebrow, Button, PipFrame, Hud, ScreenHeader, highlightHudGesture } from "../ui/components.js";
+import { Bezel, Eyebrow, Button, PipFrame, Hud, ScreenHeader, Toggle, highlightHudGesture } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { tts, Timer } from "../audio.js";
@@ -74,10 +74,13 @@ export async function mount(root) {
 
   let currentHud = Hud({ status: "tracking", active: null });
 
-  const header = ScreenHeader(
-    eyebrow,
+  const navControls = document.createElement("div");
+  navControls.style.cssText = "display:flex; align-items:center; gap: var(--space-4);";
+  navControls.append(
+    Toggle({ label: "Voice Q&A", checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
     Button({ label: "Back to recipes", intent: "ghost", onClick: () => commands.dispatch("exit", "button") }),
   );
+  const header = ScreenHeader(eyebrow, navControls);
 
   const wrap = document.createElement("div");
   wrap.className = "cooking-wrap";
@@ -187,6 +190,7 @@ export async function mount(root) {
   voice = new VoiceLoop({
     onCommand: (a) => { const action = VOICE_ACTION[a]; if (action) commands.dispatch(action, "voice"); },
     onQA: async (question) => {
+      if (!state.voiceQA) return;          // voice Q&A toggled off by the user
       const recipe = state.recipes[state.recipe_index];
       if (!recipe) return;
       try {

@@ -17,6 +17,7 @@ export class State {
     this.locked_step = false;       // sticky-step
     this.idle = false;              // auto-pause flag
     this.mode = "single";           // "single" | "parallel-2"
+    this.voiceQA = localStorage.getItem("gestucook.voiceQA") !== "off";  // default on
     this.cost = { usd: 0, in: 0, out: 0 };
     this._listeners = new Map();
   }
@@ -53,6 +54,11 @@ export class State {
 
   setLocked(v) { this.locked_step = !!v; this.emit("locked", v); }
   setIdle(v) { this.idle = !!v; this.emit("idle", v); }
+  setVoiceQA(v) {
+    this.voiceQA = !!v;
+    try { localStorage.setItem("gestucook.voiceQA", v ? "on" : "off"); } catch {}
+    this.emit("voiceQA", this.voiceQA);
+  }
 
   addCost(delta) {
     this.cost.usd += delta.usd || 0;

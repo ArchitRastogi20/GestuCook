@@ -108,6 +108,24 @@ export function ScreenHeader(left, right) {
   return el("div", { cls: "screen-header" }, [left, right]);
 }
 
+// A labelled on/off switch. onChange(checked) fires on each toggle.
+export function Toggle({ label = "", checked = false, onChange } = {}) {
+  const knob  = el("span", { cls: "toggle-knob" });
+  const track = el("span", { cls: "toggle" + (checked ? " on" : "") }, [knob]);
+  const field = el("button", {
+    cls: "toggle-field",
+    attrs: { type: "button", role: "switch", "aria-checked": String(checked) },
+  }, [el("span", { cls: "toggle-label", text: label }), track]);
+  let on = checked;
+  field.addEventListener("click", () => {
+    on = !on;
+    track.classList.toggle("on", on);
+    field.setAttribute("aria-checked", String(on));
+    onChange && onChange(on);
+  });
+  return field;
+}
+
 export function Chip({ label = "", variant = "default" } = {}) {
   const cls = variant === "copper" ? "chip chip--copper"
             : variant === "sage"   ? "chip chip--sage"

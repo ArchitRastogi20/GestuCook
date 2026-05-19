@@ -338,3 +338,100 @@
 }
 .toggle.on { background: var(--copper); border-color: var(--copper); }
 .toggle.on .toggle-knob { transform: translateX(20px); }
+
+/* -- Live Q&A overlay ──────────────────────────────────────────────── */
+.qa-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: oklch(0.30 0.018 60 / 0.34);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-quart);
+}
+.qa-overlay.show { opacity: 1; }
+.qa-card {
+  width: min(560px, 100%);
+  transform: translateY(10px) scale(0.985);
+  transition: transform var(--t-spring);
+}
+.qa-overlay.show .qa-card { transform: none; }
+.qa-card > .core {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: var(--space-4);
+}
+.qa-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.qa-overlay--listening .qa-eyebrow { color: var(--sage); }
+.qa-overlay--error     .qa-eyebrow { color: var(--copper); }
+
+/* countdown ring — visible only while listening */
+.qa-ring-wrap { position: relative; width: 128px; height: 128px; display: none; }
+.qa-overlay--listening .qa-ring-wrap { display: block; }
+.qa-ring { width: 128px; height: 128px; display: block; }
+.qa-ring-bg { fill: none; stroke: var(--hairline); stroke-width: 5; }
+.qa-ring-fg {
+  fill: none;
+  stroke: var(--sage);
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+.qa-ring-num {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-size: 44px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+/* thinking dots — visible only while thinking */
+.qa-dots { display: none; gap: 6px; }
+.qa-overlay--thinking .qa-dots { display: inline-flex; }
+.qa-dots i {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--copper);
+  animation: qa-dot 1s var(--t-quart) infinite;
+}
+.qa-dots i:nth-child(2) { animation-delay: 0.16s; }
+.qa-dots i:nth-child(3) { animation-delay: 0.32s; }
+@keyframes qa-dot {
+  0%, 60%, 100% { opacity: 0.25; transform: translateY(0); }
+  30%           { opacity: 1;    transform: translateY(-4px); }
+}
+
+.qa-title {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 3.4vw, 30px);
+  font-weight: 480;
+  line-height: 1.22;
+  color: var(--ink);
+  max-width: 30ch;
+}
+.qa-overlay--thinking .qa-title { font-style: italic; color: var(--ink-2); }
+.qa-body {
+  font-family: var(--font-body);
+  font-size: 14px;
+  color: var(--ink-3);
+}
+.qa-body:empty { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .qa-card { transition: none; }
+  .qa-dots i { animation: none; }
+  .qa-ring-fg { transition: none !important; }
+}

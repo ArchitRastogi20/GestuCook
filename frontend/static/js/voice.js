@@ -1,12 +1,17 @@
 // frontend/static/js/voice.js
-// Always-on small ASR loop. Captures 3-second chunks, matches a tiny command
-// grammar. Anything that isn't a command is treated as a spoken question --
-// there is NO wake word. The backend's Q&A prompt corrects garbled speech
-// recognition, so a misheard question still gets a sensible answer.
+// Always-on small ASR loop for VOICE COMMANDS. Captures 3-second chunks and
+// matches a tiny command grammar (next, back, pause, ...). Anything that is not
+// a command is ignored -- spoken QUESTIONS are no longer captured here.
+//
+// Questions are gesture-gated: the peace sign opens a fixed listening window
+// (see qa.js), and that window is recorded by captureQuestion() below. This
+// removes the old always-on behaviour where any stray utterance was shipped to
+// the LLM as a question.
 //
 // Public:
-//   const v = new VoiceLoop({ onCommand(action, raw) {}, onQA(question){} })
+//   const v = new VoiceLoop({ onCommand(action, raw) {} })
 //   v.start(); v.stop();
+//   const text = await v.captureQuestion(5500)   // one-shot, for a Q&A window
 
 import { api } from "./api.js";
 
@@ -16,6 +21,7 @@ const GRAMMAR = [
   { action: "repeat",          patterns: [/^(repeat|again|read (it )?again)$/i] },
   { action: "pause",           patterns: [/^(pause|stop|hold on)$/i] },
   { action: "resume",          patterns: [/^(resume|continue|keep going)$/i] },
+  { action: "ask",             patterns: [/^(question|i have a question|ask|ask a question|hey chef)$/i] },
   { action: "ambient_enter",   patterns: [/^(kitchen mode|ambient|ambient mode|big mode)$/i] },
   { action: "ambient_exit",    patterns: [/^(normal mode|exit kitchen|back to normal|small mode)$/i] },
   { action: "trainer",         patterns: [/^(train|practice|practice gestures|gesture trainer)$/i] },
@@ -29,22 +35,19 @@ export function matchCommand(raw) {
   return null;
 }
 
-// No wake word: any utterance that isn't a command is sent as a question.
-// We require at least two words so single-token ASR noise (Whisper transcribes
-// silence as stray words) doesn't fire an LLM call -- the backend then corrects
-// garbled transcriptions and rejects ones too implausible to be a question.
+// A plausible spoken question needs at least two words -- single-token ASR
+// noise (Whisper transcribes silence as stray words) should not reach the LLM.
 export function looksLikeQuestion(raw) {
   const words = (raw || "").replace(/[^\p{L}\p{N}\s]/gu, " ").trim().split(/\s+/).filter(Boolean);
   return words.length >= 2;
 }
 
 export class VoiceLoop {
-  constructor({ onCommand, onQA, chunkMs = 3000 } = {}) {
+  constructor({ onCommand, chunkMs = 3000 } = {}) {
     this.onCommand = onCommand || (() => {});
-    this.onQA      = onQA      || (() => {});
     this.chunkMs   = chunkMs;
     this.running   = false;
-    this.muted     = false;   // muted while TTS plays
+    this.muted     = false;   // muted while TTS plays, or during a Q&A capture
     this._stream   = null;
     this._rec      = null;
   }
@@ -74,16 +77,55 @@ export class VoiceLoop {
       try {
         const res = await api.transcribe(blob);
         const text = (res?.text || "").trim();
+        // Commands only. A non-command utterance is ignored -- questions are
+        // captured by captureQuestion() during a gesture-gated Q&A window.
         if (text) {
-          // Commands first; anything else is a spoken question (no wake word).
           const cmd = matchCommand(text);
           if (cmd) this.onCommand(cmd.action, text);
-          else if (looksLikeQuestion(text)) this.onQA(text, text);
         }
       } catch {}
       if (this.running) this._tick();
     };
     this._rec.start();
     setTimeout(() => { if (this._rec && this._rec.state === "recording") this._rec.stop(); }, this.chunkMs);
+  }
+
+  // One-shot capture for a live Q&A window. Records a single `ms`-long blob
+  // from the already-granted microphone stream and returns the transcription.
+  // The command loop is muted for the duration so it cannot double-capture.
+  async captureQuestion(ms = 5500) {
+    if (!this._stream) return "";
+    const wasMuted = this.muted;
+    this.mute();
+    // Stop the loop's in-flight recorder so ours is the only live one.
+    if (this._rec && this._rec.state === "recording") {
+      try { this._rec.stop(); } catch {}
+    }
+    await new Promise(r => setTimeout(r, 150));   // let the loop recorder settle
+
+    const chunks = [];
+    let rec;
+    try {
+      rec = new MediaRecorder(this._stream);
+    } catch {
+      if (!wasMuted) this.unmute();
+      return "";
+    }
+    rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+    const stopped = new Promise(res => { rec.onstop = res; });
+    rec.start();
+    await new Promise(r => setTimeout(r, ms));
+    if (rec.state !== "inactive") { try { rec.stop(); } catch {} }
+    await stopped;
+    if (!wasMuted) this.unmute();
+
+    if (!chunks.length) return "";
+    const blob = new Blob(chunks, { type: "audio/webm" });
+    try {
+      const res = await api.transcribe(blob);
+      return (res?.text || "").trim();
+    } catch {
+      return "";
+    }
   }
 }

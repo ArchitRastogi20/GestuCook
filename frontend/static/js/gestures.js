@@ -63,7 +63,7 @@ const DEFAULTS = {
   swipeWindowMs:   650,    // trajectory history horizon
   swipeMinMs:       80,    // reject sub-flick noise
   swipeMinTravel:  0.12,   // net |dx| as a fraction of frame width
-  swipeMonotonic:  0.62,   // fraction of per-sample steps moving the dominant way
+  swipeMonotonic:  0.62,   // min straightness = net travel / total travel
   swipeSettleMs:   220,    // wrist still this long -> re-arm (anywhere, not just centre)
   swipeSettleSpan: 0.035,  // "still" = horizontal span below this
   swipeArmMs:      160,    // ignore swipes briefly after the hand (re)appears
@@ -216,11 +216,13 @@ function classifyHand(lm, cfg) {
     // Closed hand -- the thumb decides between a fist and a thumbs-up.
     //
     // The old test projected the thumb tip onto the wrist->middle-MCP up axis.
-    // That axis ROTATES with the hand, so for a real thumbs-up (hand turned
-    // ~90 deg) it points sideways and the test fails -- the core reason
-    // thumbs-up "often isn't recognised". This version is rotation invariant:
-    //   1. the thumb juts well clear of the curled fist, and
-    //   2. its tip sits above the palm in SCREEN space (y grows downward).
+    // That axis ROTATES with the hand, so even a correct thumbs-up made with
+    // the forearm at an angle failed -- the core reason thumbs-up "often isn't
+    // recognised". This version drops that axis:
+    //   1. the thumb juts well clear of the curled fist -- rotation invariant,
+    //      this is what separates a thumbs-up from a plain fist; then
+    //   2. its tip points screen-upward (smaller y), which is what "thumbs-up"
+    //      actually means -- a thumb pointed sideways is deliberately NOT one.
     const mcps = [lm[LM.INDEX.mcp], lm[LM.MIDDLE.mcp], lm[LM.RING.mcp], lm[LM.PINKY.mcp]];
     const palm = {
       x: (mcps[0].x + mcps[1].x + mcps[2].x + mcps[3].x) / 4,
@@ -556,18 +558,18 @@ export const GestureEngine = (() => {
 
     const dx = last.x - first.x;
     lastSwipeDx = dx;
-    const dir = Math.sign(dx);
-    if (dir === 0) return null;
+    if (dx === 0) return null;
 
-    // Monotonicity: fraction of per-sample steps moving the dominant direction.
-    let agree = 0, total = 0;
+    // Straightness: net travel / total absolute travel. A clean sweep scores
+    // ~1; a back-and-forth wave piles up total travel with little net
+    // displacement, so it scores low. This is robust to a single jittered
+    // sample -- a per-sample sign count is not (one reversal in a 4-sample
+    // window would sink it).
+    let totalTravel = 0;
     for (let i = 1; i < wristHistory.length; i++) {
-      const step = wristHistory[i].x - wristHistory[i - 1].x;
-      if (step === 0) continue;
-      total++;
-      if (Math.sign(step) === dir) agree++;
+      totalTravel += Math.abs(wristHistory[i].x - wristHistory[i - 1].x);
     }
-    lastSwipeMono = total > 0 ? agree / total : 0;
+    lastSwipeMono = totalTravel > 0 ? Math.abs(dx) / totalTravel : 0;
 
     if (Math.abs(dx) < cfg.swipeMinTravel) return null;
     if (lastSwipeMono < cfg.swipeMonotonic) return null;

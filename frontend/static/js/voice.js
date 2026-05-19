@@ -44,12 +44,13 @@ export function looksLikeQuestion(raw) {
 
 export class VoiceLoop {
   constructor({ onCommand, chunkMs = 3000 } = {}) {
-    this.onCommand = onCommand || (() => {});
-    this.chunkMs   = chunkMs;
-    this.running   = false;
-    this.muted     = false;   // muted while TTS plays, or during a Q&A capture
-    this._stream   = null;
-    this._rec      = null;
+    this.onCommand   = onCommand || (() => {});
+    this.chunkMs     = chunkMs;
+    this.running     = false;
+    this.muted       = false;   // muted while TTS plays (poll-based, re-checked every 200ms)
+    this._capturing  = false;   // a Q&A capture owns the mic; the loop must not record
+    this._stream     = null;
+    this._rec        = null;
   }
   mute()   { this.muted = true; }
   unmute() { this.muted = false; }
@@ -68,6 +69,9 @@ export class VoiceLoop {
   }
   async _tick() {
     if (!this.running) return;
+    // A Q&A capture owns the mic -- it restarts the loop itself when it ends,
+    // so we do NOT re-poll here (unlike the TTS mute below).
+    if (this._capturing) return;
     if (this.muted) { setTimeout(() => this._tick(), 200); return; }
     const chunks = [];
     this._rec = new MediaRecorder(this._stream);
@@ -92,12 +96,15 @@ export class VoiceLoop {
 
   // One-shot capture for a live Q&A window. Records a single `ms`-long blob
   // from the already-granted microphone stream and returns the transcription.
-  // The command loop is muted for the duration so it cannot double-capture.
+  //
+  // The `_capturing` flag (not the TTS `muted` flag) gates the command loop:
+  // `muted` is driven asynchronously by TTS playback callbacks and could flip
+  // mid-window, so it cannot be trusted to bracket a capture. `_capturing` is
+  // owned solely here and the loop is restarted explicitly when we are done.
   async captureQuestion(ms = 5500) {
     if (!this._stream) return "";
-    const wasMuted = this.muted;
-    this.mute();
-    // Stop the loop's in-flight recorder so ours is the only live one.
+    this._capturing = true;
+    // Stop the loop's in-flight recorder so ours is the only one on the stream.
     if (this._rec && this._rec.state === "recording") {
       try { this._rec.stop(); } catch {}
     }
@@ -108,16 +115,20 @@ export class VoiceLoop {
     try {
       rec = new MediaRecorder(this._stream);
     } catch {
-      if (!wasMuted) this.unmute();
+      this._capturing = false;
+      if (this.running) this._tick();
       return "";
     }
+    this._rec = rec;                              // so stop() can tear this down too
     rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
     const stopped = new Promise(res => { rec.onstop = res; });
     rec.start();
     await new Promise(r => setTimeout(r, ms));
     if (rec.state !== "inactive") { try { rec.stop(); } catch {} }
     await stopped;
-    if (!wasMuted) this.unmute();
+
+    this._capturing = false;
+    if (this.running) this._tick();               // explicitly resume the command loop
 
     if (!chunks.length) return "";
     const blob = new Blob(chunks, { type: "audio/webm" });

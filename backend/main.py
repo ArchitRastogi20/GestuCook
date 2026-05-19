@@ -66,14 +66,21 @@ def parse_step_duration(text: str):
 
 def enrich_recipes(recipes):
     for r in recipes.get("recipes", recipes if isinstance(recipes, list) else []):
+        # A repaired / truncated LLM response can leave a recipe or its steps
+        # in a shape that is not a dict / list -- guard before iterating.
+        if not isinstance(r, dict):
+            continue
         steps = r.get("steps", [])
+        if not isinstance(steps, list):
+            steps = []
         new_steps = []
         for s in steps:
             if isinstance(s, str):
                 new_steps.append({"text": s, "duration_seconds": parse_step_duration(s)})
-            else:
+            elif isinstance(s, dict):
                 s.setdefault("duration_seconds", parse_step_duration(s.get("text", "")))
                 new_steps.append(s)
+            # any other shape (a stray value from a bad repair) is dropped
         r["steps"] = new_steps
     return recipes
 

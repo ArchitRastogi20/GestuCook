@@ -112,6 +112,9 @@ export async function mount(root) {
   }
 
   function renderStep() {
+    // Changing step stops the previous step's narration -- otherwise a swipe
+    // away mid-sentence leaves the old clip playing under the new one.
+    tts.stopAll();
     const i = state.step_index = Math.min(state.step_index, steps.length - 1);
     [...progress.children].forEach((p, idx) => {
       p.classList.toggle("done", idx < i);
@@ -162,7 +165,7 @@ export async function mount(root) {
     switch (action) {
       case "next":    advance(); break;
       case "back":    state.prevStep(); renderStep(); break;
-      case "read":    tts.enqueue(stepText.textContent); break;
+      case "read":    tts.stopAll(); tts.enqueue(stepText.textContent); break;
       case "lock":    state.setLocked(!state.locked_step); refreshHud();
                       tts.enqueue(state.locked_step ? "Locked." : "Released."); break;
       case "exit":    tts.stopAll(); state.go("recipes"); break;
@@ -242,6 +245,7 @@ async function mountParallel(root) {
   enter(wrap);
 
   function render() {
+    tts.stopAll();                       // stop the prior lane's line before the new one
     const cur = schedule[cursor];
     laneA.classList.toggle("active", cur?.recipe === "A");
     laneB.classList.toggle("active", cur?.recipe === "B");

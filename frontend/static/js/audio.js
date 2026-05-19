@@ -10,6 +10,7 @@ export class TTSQueue {
     this.playing = null;
     this.audio = null;
     this.inFlight = false;
+    this.epoch = 0;            // bumped by stopAll() to invalidate in-flight work
     this._listeners = new Set();
   }
 
@@ -24,32 +25,60 @@ export class TTSQueue {
   get size() { return this.queue.length; }
 
   async enqueue(text) {
+    if (!text) return;
     this.queue.push(text);
-    if (!this.playing) this._next();
+    if (!this.playing && !this.inFlight) this._next();
   }
 
+  // Hard stop. Clears the queue, stops the current clip, AND invalidates any
+  // clip whose audio is still being FETCHED: bumping `epoch` makes the
+  // in-flight _next() discard its blob instead of playing it after the stop.
+  // Without this, a clip requested just before a screen / step change keeps
+  // playing on the next screen -- the overlapping-narration bug.
   stopAll() {
+    this.epoch++;
     this.queue = [];
-    if (this.audio) { this.audio.pause(); this.audio.src = ""; }
+    if (this.audio) {
+      this.audio.onended = null;
+      this.audio.onerror = null;
+      try { this.audio.pause(); } catch {}
+      this.audio.src = "";
+      this.audio = null;
+    }
     this.playing = null;
+    this.inFlight = false;
+    this._emitPlaying(false);
   }
 
   async _next() {
-    if (this.inFlight) return;       // another _next() is mid-fetch; will pick up after onended
+    if (this.inFlight) return;       // another _next() is mid-fetch; will pick up after it ends
     const text = this.queue.shift();
     if (!text) { this.playing = null; return; }
     this.playing = text;
     this.inFlight = true;
+    const myEpoch = this.epoch;
     try {
       const blob = await this.fetcher(text);
+      if (myEpoch !== this.epoch) return;   // stopAll() ran while fetching -- discard, own nothing
       const url = URL.createObjectURL(blob);
-      this.audio = new Audio(url);
-      this.audio.onended = () => { URL.revokeObjectURL(url); this.inFlight = false; this._emitPlaying(false); this._next(); };
-      this.audio.onerror = () => { URL.revokeObjectURL(url); this.inFlight = false; this._emitPlaying(false); this._next(); };
+      const audio = new Audio(url);
+      this.audio = audio;
+      const done = () => {
+        URL.revokeObjectURL(url);
+        if (myEpoch !== this.epoch) return; // a newer clip (or a stop) owns the queue now
+        this.inFlight = false;
+        this.playing = null;
+        this._emitPlaying(false);
+        this._next();
+      };
+      audio.onended = done;
+      audio.onerror = done;
       this._emitPlaying(true);
-      this.audio.play();
+      audio.play();
     } catch (e) {
+      if (myEpoch !== this.epoch) return;
       this.inFlight = false;
+      this.playing = null;
       this._emitPlaying(false);
       this._next();
     }

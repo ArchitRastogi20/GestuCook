@@ -2,7 +2,7 @@
 // Browse generated recipes. mount() starts the camera once; changing recipe
 // re-renders the page but REUSES the same <video>/<canvas>, so the webcam
 // stream is never interrupted. All input routes through the command arbiter.
-import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade, ScreenHeader, highlightHudGesture } from "../ui/components.js";
+import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade, ScreenHeader, Toggle, highlightHudGesture } from "../ui/components.js";
 import { state } from "../state.js";
 import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
@@ -98,10 +98,15 @@ export async function mount(root) {
 
     const hud = Hud({ status: "tracking", active: null });
 
-    const header = ScreenHeader(
-      eyebrow,
+    // Voice Q&A toggle lives here too, so it can be set while choosing a
+    // recipe -- "on the main page, while starting the cooking part".
+    const navControls = document.createElement("div");
+    navControls.style.cssText = "display:flex; align-items:center; gap: var(--space-4);";
+    navControls.append(
+      Toggle({ label: "Voice Q&A ✌", checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
       Button({ label: "Home", intent: "ghost", onClick: () => commands.dispatch("home", "button") }),
     );
+    const header = ScreenHeader(eyebrow, navControls);
 
     const wrap = document.createElement("div");
     wrap.append(header, h1, lede, stage);

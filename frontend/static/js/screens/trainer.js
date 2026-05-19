@@ -12,7 +12,7 @@ const STEPS = [
   { name: "Thumb_Up",    label: "thumbs up",   prompt: "Show me a thumbs up." },
   { name: "Closed_Fist", label: "closed fist", prompt: "Now a closed fist." },
   { name: "Open_Palm",   label: "open palm",   prompt: "Now an open palm." },
-  { name: "Victory",     label: "peace sign",  prompt: "Now a peace sign (V)." },
+  { name: "Victory",     label: "peace sign",  prompt: "Now a peace sign. This is how you ask a question while cooking." },
   { name: "Pointing_Up", label: "point up",    prompt: "Now point your index finger up." },
 ];
 

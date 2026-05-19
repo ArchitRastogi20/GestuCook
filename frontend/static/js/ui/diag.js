@@ -21,6 +21,7 @@ function render() {
     `holding ${f.cand ? f.cand : "--"}  ${Math.round((f.fill || 0) * 100)}%`,
     `canned  ${f.canned || "-"}`,
     `armed   ${f.needRelease ? "no — release hand" : "yes"}`,
+    `swipe   dx ${(f.swipeDx || 0).toFixed(2)}  mono ${Math.round((f.swipeMono || 0) * 100)}%`,
   ].join("\n");
 
   const cmds = commands.getLog().slice(-12).reverse().map(c => {

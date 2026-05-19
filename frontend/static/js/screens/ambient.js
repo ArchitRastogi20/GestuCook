@@ -2,19 +2,20 @@
 // Kitchen mode: huge step text, webcam hidden. mount() sets up camera, mic and
 // the step display once; stepping only re-renders text.
 import { state } from "../state.js";
-import { Hud, highlightHudGesture } from "../ui/components.js";
+import { Hud, QaOverlay, highlightHudGesture } from "../ui/components.js";
 import { GestureEngine } from "../gestures.js";
 import { tts } from "../audio.js";
 import { VoiceLoop } from "../voice.js";
 import { enter } from "../ui/motion.js";
 import { commands } from "../commands.js";
+import { runQaSession, qaActive } from "../qa.js";
 
 const GESTURE_ACTION = {
   swipe_right: "next", thumbs_up: "next", swipe_left: "back",
-  pointing_up: "exit", fist: "exit",
+  pointing_up: "exit", fist: "exit", victory: "ask",
 };
 const VOICE_ACTION = {
-  next: "next", back: "back", repeat: "read", ambient_exit: "exit",
+  next: "next", back: "back", repeat: "read", ask: "ask", ambient_exit: "exit",
 };
 
 let voice = null;
@@ -36,7 +37,8 @@ export async function mount(root) {
   wrap.append(step, meta, video, canvas);
 
   let hud = Hud({ status: "tracking", active: null });
-  root.append(wrap, hud);
+  const qaOverlay = QaOverlay();
+  root.append(wrap, hud, qaOverlay.el);
   enter(wrap);
 
   const stepTextOf = (i) => {
@@ -52,6 +54,7 @@ export async function mount(root) {
   }
 
   function onAction(action) {
+    if (qaActive() && action !== "ask") return;   // no nav while a question runs
     switch (action) {
       case "next":
         if (state.step_index + 1 >= steps.length) state.go("epilogue");
@@ -60,11 +63,18 @@ export async function mount(root) {
       case "back": state.prevStep(); renderStep(); break;
       case "read": tts.enqueue(stepTextOf(state.step_index)); break;
       case "exit": state.go("cooking"); break;
+      case "ask":  runQaSession({
+                     voice,
+                     getRecipe: () => state.recipes[state.recipe_index],
+                     getStep:   () => state.step_index,
+                     overlay:   qaOverlay,
+                   }); break;
     }
   }
   commands.bind(onAction);
 
   function onGesture(g) {
+    if (qaActive()) return;          // no navigation while a question is in flight
     highlightHudGesture(hud, g);
     const action = GESTURE_ACTION[g];
     if (action) commands.dispatch(action, "gesture");

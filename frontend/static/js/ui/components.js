@@ -170,6 +170,7 @@ const HUD_PILLS = [
   { key: "thumbs_up",   label: "thumbs up" },
   { key: "fist",        label: "fist" },
   { key: "open_palm",   label: "open palm" },
+  { key: "victory",     label: "✌ ask" },
 ];
 
 export function Hud({ status = "tracking", active = null, timer = null, locked = false } = {}) {
@@ -208,4 +209,90 @@ export function Cascade({ items = [], focusedIndex = 0 } = {}) {
   if (next) wrap.appendChild(el("div", { cls: "peek next" }, [peekCore(next)]));
   if (prev) wrap.appendChild(el("div", { cls: "peek prev" }, [peekCore(prev)]));
   return wrap;
+}
+
+// Live Q&A overlay. A centered card with four states, so the system state is
+// unmistakable: a listening window with a depleting countdown ring, then the
+// heard question, then the spoken answer. Controller methods drive the states;
+// answer/error self-dismiss. Returns { el, listening, thinking, answer, error,
+// dismiss }.
+export function QaOverlay() {
+  const eyebrow = el("div", { cls: "qa-eyebrow" });
+  const ringWrap = el("div", { cls: "qa-ring-wrap" });
+  ringWrap.innerHTML = `
+    <svg class="qa-ring" viewBox="0 0 64 64" aria-hidden="true">
+      <circle class="qa-ring-bg" cx="32" cy="32" r="27"></circle>
+      <circle class="qa-ring-fg" cx="32" cy="32" r="27" transform="rotate(-90 32 32)"
+              stroke-dasharray="170" stroke-dashoffset="0"></circle>
+    </svg>
+    <span class="qa-ring-num"></span>`;
+  const ringFg  = ringWrap.querySelector(".qa-ring-fg");
+  const ringNum = ringWrap.querySelector(".qa-ring-num");
+  const dots  = el("span", { cls: "qa-dots", html: "<i></i><i></i><i></i>" });
+  const title = el("div", { cls: "qa-title" });
+  const body  = el("div", { cls: "qa-body" });
+  const core  = el("div", { cls: "core" }, [eyebrow, ringWrap, dots, title, body]);
+  const card  = el("div", { cls: "qa-card bezel" }, [core]);
+  const root  = el("div", { cls: "qa-overlay", attrs: { role: "status", "aria-live": "polite" } }, [card]);
+
+  let countdown = null, dismissT = null;
+  function clearTimers() {
+    if (countdown) { clearInterval(countdown); countdown = null; }
+    if (dismissT)  { clearTimeout(dismissT);   dismissT  = null; }
+  }
+  function setState(s) { root.className = "qa-overlay show qa-overlay--" + s; }
+
+  const ctl = {
+    el: root,
+    listening(ms = 5500) {
+      clearTimers();
+      setState("listening");
+      eyebrow.textContent = "listening";
+      title.textContent = "Ask your question";
+      body.textContent  = "Speak now, then wait for the answer.";
+      // deplete the ring over `ms` via a single CSS transition
+      ringFg.style.transition = "none";
+      ringFg.style.strokeDashoffset = "0";
+      void ringFg.getBoundingClientRect();
+      ringFg.style.transition = `stroke-dashoffset ${ms}ms linear`;
+      ringFg.style.strokeDashoffset = "170";
+      let left = Math.ceil(ms / 1000);
+      ringNum.textContent = String(left);
+      countdown = setInterval(() => {
+        left -= 1;
+        ringNum.textContent = String(Math.max(0, left));
+        if (left <= 0) { clearInterval(countdown); countdown = null; }
+      }, 1000);
+    },
+    thinking(question) {
+      clearTimers();
+      setState("thinking");
+      eyebrow.textContent = "thinking";
+      title.textContent = question || "...";
+      body.textContent  = "";
+    },
+    answer(text) {
+      clearTimers();
+      setState("answer");
+      eyebrow.textContent = "answer";
+      title.textContent = text || "";
+      body.textContent  = "";
+      // hold on screen roughly as long as it takes to read the answer aloud
+      const hold = Math.min(13000, 3000 + (text || "").length * 55);
+      dismissT = setTimeout(() => ctl.dismiss(), hold);
+    },
+    error(text) {
+      clearTimers();
+      setState("error");
+      eyebrow.textContent = "voice Q&A";
+      title.textContent = text || "Something went wrong";
+      body.textContent  = "";
+      dismissT = setTimeout(() => ctl.dismiss(), 3200);
+    },
+    dismiss() {
+      clearTimers();
+      root.classList.remove("show");
+    },
+  };
+  return ctl;
 }

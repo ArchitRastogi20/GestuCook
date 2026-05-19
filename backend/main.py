@@ -66,14 +66,21 @@ def parse_step_duration(text: str):
 
 def enrich_recipes(recipes):
     for r in recipes.get("recipes", recipes if isinstance(recipes, list) else []):
+        # A repaired / truncated LLM response can leave a recipe or its steps
+        # in a shape that is not a dict / list -- guard before iterating.
+        if not isinstance(r, dict):
+            continue
         steps = r.get("steps", [])
+        if not isinstance(steps, list):
+            steps = []
         new_steps = []
         for s in steps:
             if isinstance(s, str):
                 new_steps.append({"text": s, "duration_seconds": parse_step_duration(s)})
-            else:
+            elif isinstance(s, dict):
                 s.setdefault("duration_seconds", parse_step_duration(s.get("text", "")))
                 new_steps.append(s)
+            # any other shape (a stray value from a bad repair) is dropped
         r["steps"] = new_steps
     return recipes
 
@@ -308,25 +315,89 @@ async def detect_ingredients(image_b64: str, mime: str) -> tuple[list[str], dict
 
 # ── recipe generation ─────────────────────────────────────────
 
-RECIPE_PROMPT_TEMPLATE = """You are a culinary assistant. Given ingredients, generate exactly {count} recipes.
-Return ONLY valid JSON in this exact format, no other text:
+# A short system message keeps the model in "recipe developer" mode -- it sets
+# the bar for detail far more reliably than the same words inside the user turn.
+RECIPE_SYSTEM = (
+    "You are a professional recipe developer. You write recipes a home cook can "
+    "follow end to end with no prior knowledge: every step is one concrete action "
+    "with quantities, heat levels, times and a sensory cue for doneness. You always "
+    "reply with valid JSON and nothing else."
+)
+
+# NOTE: this template keeps the {count}/{ingredients}/{cuisine_line} placeholders
+# because the /api/recipes route re-formats it for token-cost estimation.
+RECIPE_PROMPT_TEMPLATE = """Create exactly {count} distinct, genuinely cookable recipes from the ingredients below.
+
+Requirements for EVERY recipe:
+- 8 to 14 steps. Each step is ONE concrete action; never bundle two actions into one step.
+- Each step, where relevant, states: the quantity used in that step, the heat level
+  (for example medium-high), the time written as "for 4 minutes" or "about 4 minutes",
+  and a sensory cue for doneness (for example "until golden" or "until it springs back").
+- Ingredients list explicit kitchen quantities (grams, cups, pieces).
+- Steps may assume common pantry staples on top of the given ingredients:
+  salt, pepper, cooking oil, butter, water.
+- Realistic prep_time, cook_time and total_time, an integer servings, and a
+  difficulty of "Easy", "Medium" or "Hard".
+
+Return ONLY valid JSON in EXACTLY this shape, no prose, no markdown fences:
 {{
   "recipes": [
     {{
-      "name": "Recipe Name",
-      "description": "Short 1-line description",
+      "name": "Recipe name",
+      "cuisine": "Cuisine, for example Italian",
+      "description": "One-line hook for the recipe card.",
+      "long_description": "Two or three sentences: what the dish is and what to expect.",
+      "difficulty": "Easy",
       "prep_time": "15 min",
       "cook_time": "30 min",
+      "total_time": "45 min",
       "servings": 4,
-      "ingredients": ["200g item1", "1 item2"],
-      "steps": ["Step 1 instruction", "Step 2 instruction"]
+      "ingredients": [
+        {{ "name": "chicken thighs", "qty": "6 pieces (about 900 g)" }},
+        {{ "name": "garlic", "qty": "5 cloves, minced" }}
+      ],
+      "steps": [
+        "Pat the chicken dry with paper towel and season both sides with salt and pepper; dry skin is what lets it brown.",
+        "Heat a large skillet over medium-high heat for about 2 minutes, then add 1 tbsp oil and swirl to coat."
+      ]
     }}
   ]
 }}
 
 Ingredients available: {ingredients}
 {cuisine_line}
-Return ONLY the JSON."""
+Return ONLY the JSON object."""
+
+
+def extract_recipe_json(raw: str):
+    """Best-effort parse of an LLM recipe response. Tolerates code fences,
+    leading/trailing prose, trailing commas, and a truncated final object
+    (the model running out of tokens mid-recipe). Returns the dict or None."""
+    if not raw:
+        return None
+    text = raw.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end != -1 and end > start:
+        text = text[start:end + 1]
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+    # Repair: drop trailing commas, then balance any brackets the model left
+    # open because the response was truncated.
+    fixed = re.sub(r",\s*([}\]])", r"\1", text)
+    open_curly = fixed.count("{") - fixed.count("}")
+    open_brack = fixed.count("[") - fixed.count("]")
+    if open_brack > 0:
+        fixed += "]" * open_brack
+    if open_curly > 0:
+        fixed += "}" * open_curly
+    try:
+        return json.loads(fixed)
+    except json.JSONDecodeError:
+        return None
 
 
 async def generate_recipes(
@@ -336,7 +407,7 @@ async def generate_recipes(
 ) -> tuple[dict, dict]:
     cuisine_line = ""
     if cuisines and len(cuisines) > 0 and cuisines[0]:
-        cuisine_line = f"Preferred cuisines: {', '.join(cuisines)}"
+        cuisine_line = f"Preferred cuisines: {', '.join(cuisines)}."
 
     prompt = RECIPE_PROMPT_TEMPLATE.format(
         count=count,
@@ -344,21 +415,34 @@ async def generate_recipes(
         cuisine_line=cuisine_line,
     )
 
-    messages = [{"role": "user", "content": prompt}]
-    result = await call_llm(messages, max_tokens=2048)
+    base_messages = [
+        {"role": "system", "content": RECIPE_SYSTEM},
+        {"role": "user", "content": prompt},
+    ]
+    # 4096 output tokens: three recipes of 8-14 detailed steps fit comfortably;
+    # 2048 (the old budget) truncated the third recipe and broke the JSON.
+    result = await call_llm(base_messages, max_tokens=4096)
     raw = result["text"].strip()
     logger.info("Recipe raw response (first 300): %.300s", raw)
+    data = extract_recipe_json(raw)
 
-    if raw.startswith("```"):
-        raw = raw.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+    if not (isinstance(data, dict) and "recipes" in data):
+        # One retry: hand the bad output back and demand JSON only.
+        logger.warning("Recipe JSON unparseable; retrying once")
+        retry_messages = base_messages + [
+            {"role": "assistant", "content": raw[:1000]},
+            {"role": "user", "content":
+                "That was not valid JSON. Reply again with ONLY the JSON object "
+                "described above, no prose and no markdown fences."},
+        ]
+        result = await call_llm(retry_messages, max_tokens=4096)
+        raw = result["text"].strip()
+        data = extract_recipe_json(raw)
 
-    try:
-        data = json.loads(raw)
-        if "recipes" in data:
-            return data, result.get("usage", {})
-    except json.JSONDecodeError:
-        logger.warning("Failed to parse recipe JSON")
+    if isinstance(data, dict) and "recipes" in data:
+        return data, result.get("usage", {})
 
+    logger.warning("Failed to parse recipe JSON after retry")
     return {"recipes": [], "error": "Failed to parse recipes"}, result.get("usage", {})
 
 

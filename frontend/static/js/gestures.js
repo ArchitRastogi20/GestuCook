@@ -59,12 +59,20 @@ const DEFAULTS = {
   idleMs:         3000,    // no hand this long -> emit "idle"
   holdMs:         1200,    // open palm held this long -> "open_palm_hold"
 
-  // Swipe (wrist-trajectory) layer.
-  swipeThreshold: 0.14,   // fraction of frame width the wrist must travel
-  swipeMinMs:      90,
-  swipeMaxMs:     550,    // also bounds how long the trajectory history is kept
-  swipeArmMs:     250,    // ignore swipes briefly after the hand (re)appears
-  moveThreshold:  0.09,   // wrist travel above this = moving (a swipe, not a held pose)
+  // Swipe (wrist-trajectory) layer. Operates on the SMOOTHED wrist x.
+  swipeWindowMs:   650,    // trajectory history horizon
+  swipeMinMs:       80,    // reject sub-flick noise
+  swipeMinTravel:  0.12,   // net |dx| as a fraction of frame width
+  swipeMonotonic:  0.62,   // min straightness = net travel / total travel
+  swipeSettleMs:   220,    // wrist still this long -> re-arm (anywhere, not just centre)
+  swipeSettleSpan: 0.035,  // "still" = horizontal span below this
+  swipeArmMs:      160,    // ignore swipes briefly after the hand (re)appears
+  moveThreshold:   0.09,   // wrist travel above this = moving (cancels a static-pose hold)
+
+  // One-Euro landmark smoothing. Adaptive low-pass: smooths a held pose hard
+  // (kills the jitter that made thumbs-up flicker) and a fast swipe little
+  // (no smear). Casiez et al., CHI 2012.
+  oneEuro: { minCutoff: 1.4, beta: 0.45, dCutoff: 1.0 },
 };
 
 export const TO_ACTION = {
@@ -85,6 +93,69 @@ function mag(a)     { return Math.hypot(a.x, a.y, a.z) || 1e-6; }
 function chainCos(p0, p1, p2) {
   const d1 = sub(p1, p0), d2 = sub(p2, p1);
   return dot(d1, d2) / (mag(d1) * mag(d2));
+}
+
+// ── One-Euro filter ──────────────────────────────────────────────────
+// Adaptive low-pass filter (Casiez et al., CHI 2012). The cutoff frequency
+// rises with the signal's speed, so slow motion (a held pose) is smoothed
+// hard while fast motion (a swipe) passes through almost untouched -- exactly
+// the trade-off a noisy CPU-only landmark stream needs.
+class OneEuroFilter {
+  constructor({ minCutoff = 1.4, beta = 0.45, dCutoff = 1.0 } = {}) {
+    this.minCutoff = minCutoff;
+    this.beta = beta;
+    this.dCutoff = dCutoff;
+    this.x = null;   // last filtered value
+    this.dx = 0;     // last filtered derivative
+    this.t = null;   // last timestamp, seconds
+  }
+  _alpha(cutoff, dt) {
+    const tau = 1 / (2 * Math.PI * cutoff);
+    return 1 / (1 + tau / dt);
+  }
+  reset() { this.x = null; this.dx = 0; this.t = null; }
+  filter(value, tMs) {
+    const t = tMs / 1000;
+    if (this.x === null) { this.x = value; this.t = t; return value; }
+    let dt = t - this.t;
+    if (!(dt > 0)) dt = 1 / 30;          // guard a zero / non-monotonic timestamp
+    this.t = t;
+    const dValue = (value - this.x) / dt;
+    const aD = this._alpha(this.dCutoff, dt);
+    this.dx = aD * dValue + (1 - aD) * this.dx;
+    const cutoff = this.minCutoff + this.beta * Math.abs(this.dx);
+    const a = this._alpha(cutoff, dt);
+    this.x = a * value + (1 - a) * this.x;
+    return this.x;
+  }
+}
+
+// One filter per coordinate of every landmark (21 x 3). Smooths a whole frame
+// of landmarks in place of the raw, jittery ones.
+class HandSmoother {
+  constructor(opts) {
+    this.opts = opts;
+    this.fx = []; this.fy = []; this.fz = [];
+    for (let i = 0; i < 21; i++) {
+      this.fx.push(new OneEuroFilter(opts));
+      this.fy.push(new OneEuroFilter(opts));
+      this.fz.push(new OneEuroFilter(opts));
+    }
+  }
+  reset() {
+    for (let i = 0; i < 21; i++) { this.fx[i].reset(); this.fy[i].reset(); this.fz[i].reset(); }
+  }
+  smooth(lm, tMs) {
+    const out = new Array(lm.length);
+    for (let i = 0; i < lm.length; i++) {
+      out[i] = {
+        x: this.fx[i].filter(lm[i].x, tMs),
+        y: this.fy[i].filter(lm[i].y, tMs),
+        z: this.fz[i].filter(lm[i].z || 0, tMs),
+      };
+    }
+    return out;
+  }
 }
 
 // Per-finger extend/curl state, persisted across frames for hysteresis.
@@ -143,7 +214,28 @@ function classifyHand(lm, cfg) {
   let label = "None";
   if (nExt === 0) {
     // Closed hand -- the thumb decides between a fist and a thumbs-up.
-    const thumbUp = ext.thumb && tipProj.thumb > knuckleProj && highestTip("thumb");
+    //
+    // The old test projected the thumb tip onto the wrist->middle-MCP up axis.
+    // That axis ROTATES with the hand, so even a correct thumbs-up made with
+    // the forearm at an angle failed -- the core reason thumbs-up "often isn't
+    // recognised". This version drops that axis:
+    //   1. the thumb juts well clear of the curled fist -- rotation invariant,
+    //      this is what separates a thumbs-up from a plain fist; then
+    //   2. its tip points screen-upward (smaller y), which is what "thumbs-up"
+    //      actually means -- a thumb pointed sideways is deliberately NOT one.
+    const mcps = [lm[LM.INDEX.mcp], lm[LM.MIDDLE.mcp], lm[LM.RING.mcp], lm[LM.PINKY.mcp]];
+    const palm = {
+      x: (mcps[0].x + mcps[1].x + mcps[2].x + mcps[3].x) / 4,
+      y: (mcps[0].y + mcps[1].y + mcps[2].y + mcps[3].y) / 4,
+    };
+    const dist2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+    const handScale2d = Math.hypot(lm[LM.MIDDLE.mcp].x - wrist.x,
+                                   lm[LM.MIDDLE.mcp].y - wrist.y) || 1e-6;
+    const curlReach = (dist2(lm[LM.INDEX.tip], palm) + dist2(lm[LM.MIDDLE.tip], palm) +
+                       dist2(lm[LM.RING.tip], palm) + dist2(lm[LM.PINKY.tip], palm)) / 4;
+    const thumbReach = dist2(lm[LM.THUMB.tip], palm);
+    const thumbOut = ext.thumb && thumbReach > 1.25 * curlReach;
+    const thumbUp  = thumbOut && lm[LM.THUMB.tip].y < palm.y - 0.05 * handScale2d;
     label = thumbUp ? "Thumb_Up" : "Closed_Fist";
   } else if (nExt === 4) {
     label = "Open_Palm";
@@ -175,6 +267,9 @@ export const GestureEngine = (() => {
   let startedAt = 0;
   let cfg = JSON.parse(JSON.stringify(DEFAULTS));
 
+  // One-Euro smoother for the 21 landmarks; rebuilt if cfg.oneEuro changes.
+  let handSmoother = new HandSmoother(cfg.oneEuro);
+
   // confirmation state -- a pose must be HELD steadily for confirmMs.
   let candLabel  = null;   // pose currently being held toward a fire
   let candSince  = 0;      // when the candidate pose started
@@ -198,6 +293,8 @@ export const GestureEngine = (() => {
   // swipe state
   let wristHistory = [];
   let swipeLocked = false;
+  let lastSwipeDx = 0;     // diagnostics: net wrist travel at the last evaluation
+  let lastSwipeMono = 0;   // diagnostics: monotonicity fraction at the last evaluation
 
   // diagnostics
   const ring = [];                 // recent fires, read by ui/diag.js
@@ -225,7 +322,9 @@ export const GestureEngine = (() => {
         numHands: 1,
         minHandDetectionConfidence: 0.5,
         minHandPresenceConfidence:  0.5,
-        minTrackingConfidence:      0.5,
+        // Lowered from 0.5: keeps the hand locked through the motion blur of a
+        // fast swipe instead of dropping tracking halfway through the gesture.
+        minTrackingConfidence:      0.3,
       });
     }
   }
@@ -276,6 +375,7 @@ export const GestureEngine = (() => {
 
   function _reset() {
     _clearPose();
+    handSmoother.reset();
     idleEmitted = false;
   }
 
@@ -296,12 +396,12 @@ export const GestureEngine = (() => {
   }
 
   function _tick(res, now) {
-    _draw(res);
-
-    const lm = res.landmarks && res.landmarks[0];
-    const hasHand = !!(lm && lm.length >= 21);
+    const rawLm = res.landmarks && res.landmarks[0];
+    const hasHand = !!(rawLm && rawLm.length >= 21);
 
     if (!hasHand) {
+      _draw(null);
+      handSmoother.reset();         // a re-appearing hand starts clean, no lurch
       if (!idleEmitted && lastSeenHandAt > 0 && now - lastSeenHandAt > cfg.idleMs) {
         idleEmitted = true;
         onGesture && onGesture("idle");
@@ -312,6 +412,11 @@ export const GestureEngine = (() => {
       onFrame && onFrame({ hasHand: false, label: "None", voteLabel: "None", voteFill: 0 });
       return;
     }
+
+    // Smooth the 21 landmarks before ANY classification or wrist tracking --
+    // every downstream test then works on a de-noised signal.
+    const lm = handSmoother.smooth(rawLm, now);
+    _draw(lm);
 
     if (now - lastSeenHandAt > 400) handArrivedAt = now;   // hand just (re)appeared
     lastSeenHandAt = now;
@@ -355,6 +460,7 @@ export const GestureEngine = (() => {
       hasHand: true, label: g, cand: candLabel,
       fill: candLabel ? Math.min(1, held / cfg.confirmMs) : 0,
       canned: canned.categoryName, needRelease, fps,
+      swipeDx: lastSwipeDx, swipeMono: lastSwipeMono,
     };
     onFrame && onFrame({
       hasHand:     true,
@@ -379,7 +485,7 @@ export const GestureEngine = (() => {
 
     // Swipe: a deliberate horizontal sweep, recognised in any hand pose.
     if (now - handArrivedAt > cfg.swipeArmMs) {
-      const swipe = _detectSwipe(now);
+      const swipe = _detectSwipe();
       if (swipe) { _fire(swipe, now, "swipe", 0); return; }
     }
 
@@ -413,13 +519,25 @@ export const GestureEngine = (() => {
 
   function _trackWrist(x, t) {
     wristHistory.push({ x, t });
-    // Keep only a recent TIME window. The old count-based window (24 samples)
-    // spanned >1.5 s at low CPU framerate, so every swipe was rejected for
-    // being "too slow". Pruning by time fixes that at any framerate.
-    const cutoff = t - cfg.swipeMaxMs;
+    // Keep only a recent TIME window, so detection is framerate independent.
+    const cutoff = t - cfg.swipeWindowMs;
     while (wristHistory.length && wristHistory[0].t < cutoff) wristHistory.shift();
-    // re-arm once the hand returns to the centre band after a swipe
-    if (swipeLocked && x > 0.35 && x < 0.65) swipeLocked = false;
+
+    // Re-arm: the old code only unlocked when the wrist returned to the centre
+    // 0.35-0.65 band, so a user who swiped and left their hand at the side
+    // could never swipe again. Now it re-arms wherever the hand SETTLES --
+    // little horizontal travel over the last swipeSettleMs.
+    if (swipeLocked) {
+      const since = t - cfg.swipeSettleMs;
+      let lo = Infinity, hi = -Infinity, n = 0;
+      for (const p of wristHistory) {
+        if (p.t < since) continue;
+        n++;
+        if (p.x < lo) lo = p.x;
+        if (p.x > hi) hi = p.x;
+      }
+      if (n >= 2 && hi - lo < cfg.swipeSettleSpan) swipeLocked = false;
+    }
   }
 
   // Total horizontal travel of the wrist across the tracked window.
@@ -430,25 +548,42 @@ export const GestureEngine = (() => {
     return hi - lo;
   }
 
-  function _detectSwipe(now) {
-    if (swipeLocked || wristHistory.length < 3) return null;
-    const a = wristHistory[0];
-    const b = wristHistory[wristHistory.length - 1];
-    const dt = b.t - a.t;
-    const dx = b.x - a.x;
-    if (dt < cfg.swipeMinMs) return null;   // upper bound is guaranteed by time-pruned history
-    // Display is CSS-mirrored, so a hand moving to the user's right travels in
-    // -x in the raw frame -> swipe_right.
-    if (dx >  cfg.swipeThreshold) { wristHistory = []; return "swipe_left";  }
-    if (dx < -cfg.swipeThreshold) { wristHistory = []; return "swipe_right"; }
-    return null;
+  // A swipe is a deliberate sweep: enough NET travel in one direction, and a
+  // path that mostly moves that one way (so a back-and-forth wave is rejected).
+  function _detectSwipe() {
+    if (swipeLocked || wristHistory.length < 4) return null;
+    const first = wristHistory[0];
+    const last  = wristHistory[wristHistory.length - 1];
+    if (last.t - first.t < cfg.swipeMinMs) return null;
+
+    const dx = last.x - first.x;
+    lastSwipeDx = dx;
+    if (dx === 0) return null;
+
+    // Straightness: net travel / total absolute travel. A clean sweep scores
+    // ~1; a back-and-forth wave piles up total travel with little net
+    // displacement, so it scores low. This is robust to a single jittered
+    // sample -- a per-sample sign count is not (one reversal in a 4-sample
+    // window would sink it).
+    let totalTravel = 0;
+    for (let i = 1; i < wristHistory.length; i++) {
+      totalTravel += Math.abs(wristHistory[i].x - wristHistory[i - 1].x);
+    }
+    lastSwipeMono = totalTravel > 0 ? Math.abs(dx) / totalTravel : 0;
+
+    if (Math.abs(dx) < cfg.swipeMinTravel) return null;
+    if (lastSwipeMono < cfg.swipeMonotonic) return null;
+
+    wristHistory = [];
+    // Display is CSS-mirrored: a hand moving to the user's right travels -x raw.
+    return dx > 0 ? "swipe_left" : "swipe_right";
   }
 
-  function _draw(res) {
+  // Draws the (already smoothed) landmark skeleton. Pass null to just clear.
+  function _draw(lm) {
     if (!ctx || !canvasEl) return;
     const W = canvasEl.width, H = canvasEl.height;
     ctx.clearRect(0, 0, W, H);
-    const lm = res.landmarks && res.landmarks[0];
     if (!lm) return;
 
     ctx.lineWidth = 2;
@@ -493,6 +628,7 @@ export const GestureEngine = (() => {
     onGesture = opts.onGesture || null;
     onFrame   = opts.onFrame   || null;
     if (opts.cfg) cfg = { ...cfg, ...opts.cfg };
+    handSmoother = new HandSmoother(cfg.oneEuro);
     _reset();
     // Synthetic frames start their clock at 0; production uses performance.now()
     // (a large value). Pre-date lastFireAt so the startup cooldown is elapsed.

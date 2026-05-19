@@ -7,7 +7,7 @@
 //
 // Every input -- gesture, voice, button -- routes through commands.dispatch(),
 // so one intent produces exactly one action.
-import { Bezel, Eyebrow, Button, PipFrame, Hud, ScreenHeader, Toggle, highlightHudGesture } from "../ui/components.js";
+import { Bezel, Eyebrow, Button, PipFrame, Hud, ScreenHeader, Toggle, QaOverlay, highlightHudGesture } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { tts, Timer } from "../audio.js";
@@ -15,16 +15,18 @@ import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
 import { VoiceLoop } from "../voice.js";
 import { commands } from "../commands.js";
+import { runQaSession, qaActive } from "../qa.js";
 import { saveMoment, captureFrame } from "../moments.js";
 import { buildSchedule } from "../scheduler.js";
 
 const GESTURE_ACTION = {
   thumbs_up: "next", swipe_right: "next", swipe_left: "back",
   open_palm: "read", open_palm_hold: "lock", fist: "exit",
+  victory: "ask",
 };
 const VOICE_ACTION = {
   next: "next", back: "back", repeat: "read", pause: "pause", resume: "resume",
-  ambient_enter: "ambient", trainer: "trainer", save_moment: "save",
+  ask: "ask", ambient_enter: "ambient", trainer: "trainer", save_moment: "save",
 };
 
 // module-level refs that unmount() needs to tear down
@@ -77,15 +79,18 @@ export async function mount(root) {
   const navControls = document.createElement("div");
   navControls.style.cssText = "display:flex; align-items:center; gap: var(--space-4);";
   navControls.append(
-    Toggle({ label: "Voice Q&A", checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
+    Toggle({ label: "Voice Q&A ✌", checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
     Button({ label: "Back to recipes", intent: "ghost", onClick: () => commands.dispatch("exit", "button") }),
   );
   const header = ScreenHeader(eyebrow, navControls);
 
+  // Live Q&A listening overlay -- driven by runQaSession when the user asks.
+  const qaOverlay = QaOverlay();
+
   const wrap = document.createElement("div");
   wrap.className = "cooking-wrap";
   wrap.append(header, progress, card, cta, pip);
-  root.append(wrap, currentHud);
+  root.append(wrap, currentHud, qaOverlay.el);
   enter(wrap);
 
   // ── per-step render (no camera/mic churn) ─────────────────────────
@@ -145,6 +150,10 @@ export async function mount(root) {
 
   // ── the single action handler (every input lands here) ────────────
   function onAction(action) {
+    // "ask" opens a Q&A session; everything else is suppressed while one runs,
+    // so a stray gesture mid-question can't skip a step.
+    if (qaActive() && action !== "ask") return;
+
     if (state.idle && action !== "pause") {   // any command wakes from auto-pause
       state.setIdle(false);
       if (stepTimer) stepTimer.resume();
@@ -162,12 +171,19 @@ export async function mount(root) {
       case "ambient": state.go("ambient"); break;
       case "trainer": state.go("trainer"); break;
       case "save":    saveCurrentMoment(); break;
+      case "ask":     runQaSession({
+                        voice,
+                        getRecipe: () => state.recipes[state.recipe_index],
+                        getStep:   () => state.step_index,
+                        overlay:   qaOverlay,
+                      }); break;
     }
   }
   commands.bind(onAction);
 
   // ── gesture input ─────────────────────────────────────────────────
   function onGesture(g) {
+    if (qaActive()) return;          // no navigation while a question is in flight
     highlightHudGesture(currentHud, g);
     if (g === "idle") {
       state.setIdle(true); tts.stopAll(); stepTimer?.pause(); refreshHud();
@@ -187,22 +203,10 @@ export async function mount(root) {
   await GestureEngine.start();
 
   // ── voice input ───────────────────────────────────────────────────
+  // The loop handles voice COMMANDS only; questions are gesture-gated and
+  // captured by runQaSession via voice.captureQuestion().
   voice = new VoiceLoop({
     onCommand: (a) => { const action = VOICE_ACTION[a]; if (action) commands.dispatch(action, "voice"); },
-    onQA: async (question) => {
-      if (!state.voiceQA) return;          // voice Q&A toggled off by the user
-      const recipe = state.recipes[state.recipe_index];
-      if (!recipe) return;
-      try {
-        const res = await api.qa({
-          session_id: state.session_id, current_recipe: recipe,
-          current_step_index: state.step_index, question,
-        });
-        state.addCost({ usd: res.cost_delta_usd, in: res.tokens_in, out: res.tokens_out });
-        state._qaCount = (state._qaCount || 0) + 1;
-        tts.enqueue(res.answer);
-      } catch { tts.enqueue("Sorry, I couldn't answer that."); }
-    },
   });
   // mute the mic while TTS plays, to stop the speaker echoing into the recogniser
   unbindTTS = tts.onPlayingChange((isPlaying) => isPlaying ? voice.mute() : voice.unmute());

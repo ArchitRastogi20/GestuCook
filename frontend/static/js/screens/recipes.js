@@ -2,7 +2,7 @@
 // Browse generated recipes. mount() starts the camera once; changing recipe
 // re-renders the page but REUSES the same <video>/<canvas>, so the webcam
 // stream is never interrupted. All input routes through the command arbiter.
-import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade, ScreenHeader, highlightHudGesture } from "../ui/components.js";
+import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade, ScreenHeader, Toggle, highlightHudGesture } from "../ui/components.js";
 import { state } from "../state.js";
 import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
@@ -45,9 +45,11 @@ export async function mount(root) {
 
     const meta = document.createElement("div");
     meta.className = "recipe-meta";
-    if (r.cuisine)  meta.append(Chip({ label: r.cuisine, variant: "copper" }));
-    if (r.time)     meta.append(Chip({ label: r.time }));
-    if (r.servings) meta.append(Chip({ label: `${r.servings} servings` }));
+    const totalTime = r.total_time || r.time;
+    if (r.cuisine)    meta.append(Chip({ label: r.cuisine, variant: "copper" }));
+    if (totalTime)    meta.append(Chip({ label: totalTime }));
+    if (r.difficulty) meta.append(Chip({ label: r.difficulty, variant: "sage" }));
+    if (r.servings)   meta.append(Chip({ label: `${r.servings} servings` }));
 
     const title = document.createElement("h2");
     title.className = "recipe-title t-display-l";
@@ -80,7 +82,8 @@ export async function mount(root) {
       items: state.recipes.map((rr, idx) => ({
         num: `recipe ${String(idx + 1).padStart(2, "0")}`,
         title: rr.name,
-        footer: [rr.cuisine, rr.time, rr.servings ? `${rr.servings} servings` : null].filter(Boolean),
+        footer: [rr.cuisine, rr.total_time || rr.time,
+                 rr.servings ? `${rr.servings} servings` : null].filter(Boolean),
       })),
       focusedIndex: i,
     });
@@ -95,10 +98,15 @@ export async function mount(root) {
 
     const hud = Hud({ status: "tracking", active: null });
 
-    const header = ScreenHeader(
-      eyebrow,
+    // Voice Q&A toggle lives here too, so it can be set while choosing a
+    // recipe -- "on the main page, while starting the cooking part".
+    const navControls = document.createElement("div");
+    navControls.style.cssText = "display:flex; align-items:center; gap: var(--space-4);";
+    navControls.append(
+      Toggle({ label: "Voice Q&A ✌", checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
       Button({ label: "Home", intent: "ghost", onClick: () => commands.dispatch("home", "button") }),
     );
+    const header = ScreenHeader(eyebrow, navControls);
 
     const wrap = document.createElement("div");
     wrap.append(header, h1, lede, stage);

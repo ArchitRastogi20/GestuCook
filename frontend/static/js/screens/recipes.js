@@ -45,9 +45,11 @@ export async function mount(root) {
 
     const meta = document.createElement("div");
     meta.className = "recipe-meta";
-    if (r.cuisine)  meta.append(Chip({ label: r.cuisine, variant: "copper" }));
-    if (r.time)     meta.append(Chip({ label: r.time }));
-    if (r.servings) meta.append(Chip({ label: `${r.servings} servings` }));
+    const totalTime = r.total_time || r.time;
+    if (r.cuisine)    meta.append(Chip({ label: r.cuisine, variant: "copper" }));
+    if (totalTime)    meta.append(Chip({ label: totalTime }));
+    if (r.difficulty) meta.append(Chip({ label: r.difficulty, variant: "sage" }));
+    if (r.servings)   meta.append(Chip({ label: `${r.servings} servings` }));
 
     const title = document.createElement("h2");
     title.className = "recipe-title t-display-l";
@@ -80,7 +82,8 @@ export async function mount(root) {
       items: state.recipes.map((rr, idx) => ({
         num: `recipe ${String(idx + 1).padStart(2, "0")}`,
         title: rr.name,
-        footer: [rr.cuisine, rr.time, rr.servings ? `${rr.servings} servings` : null].filter(Boolean),
+        footer: [rr.cuisine, rr.total_time || rr.time,
+                 rr.servings ? `${rr.servings} servings` : null].filter(Boolean),
       })),
       focusedIndex: i,
     });

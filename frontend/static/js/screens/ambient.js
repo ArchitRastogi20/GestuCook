@@ -47,6 +47,7 @@ export async function mount(root) {
   };
 
   function renderStep(speak = true) {
+    tts.stopAll();                       // stop the previous step's narration first
     const i = state.step_index = Math.min(state.step_index, steps.length - 1);
     step.textContent = stepTextOf(i);
     meta.textContent = `step ${i + 1} of ${steps.length}  ·  kitchen mode`;
@@ -61,7 +62,7 @@ export async function mount(root) {
         else { state.nextStep(); renderStep(); }
         break;
       case "back": state.prevStep(); renderStep(); break;
-      case "read": tts.enqueue(stepTextOf(state.step_index)); break;
+      case "read": tts.stopAll(); tts.enqueue(stepTextOf(state.step_index)); break;
       case "exit": state.go("cooking"); break;
       case "ask":  runQaSession({
                      voice,

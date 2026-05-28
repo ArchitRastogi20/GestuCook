@@ -130,6 +130,7 @@ export async function mount(root) {
         break;
       case "read": {
         const r = state.recipes[state.recipe_index];
+        tts.stopAll();
         tts.enqueue(`${r.name}. ${r.description || ""}`);
         break;
       }

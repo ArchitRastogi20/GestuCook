@@ -18,7 +18,7 @@ export function mount(root) {
   const sub = document.createElement("p");
   sub.className = "t-body";
   sub.style.cssText = "text-align:center; margin: 0 auto var(--space-6);";
-  sub.textContent = "Press the mic, list your ingredients, release. We'll transcribe.";
+  sub.textContent = "Press the mic, list your ingredients, release. Then pick a cuisine if you like.";
 
   const mic = document.createElement("button");
   mic.className = "mic-btn";
@@ -33,6 +33,21 @@ export function mount(root) {
 
   let detected = [];
 
+  const chipGroup = document.createElement("div");
+  chipGroup.className = "chip-group";
+  let selectedCuisine = null;
+  for (const c of ["Italian", "Indian", "Chinese", "American", "Turkish", "Any"]) {
+    const chip = Chip({ label: c });
+    chip.dataset.cuisine = c;
+    chip.style.cursor = "pointer";
+    chip.addEventListener("click", () => {
+      for (const k of chipGroup.querySelectorAll(".chip")) k.classList.remove("on");
+      chip.classList.add("on");
+      selectedCuisine = c === "Any" ? null : c;
+    });
+    chipGroup.append(chip);
+  }
+
   const reqStatus = RequestStatus();
 
   const goBtn = Button({
@@ -43,7 +58,7 @@ export function mount(root) {
       setLoading(goBtn, true, "Generating…");
       reqStatus.send("Recipe request sent", "Generating your recipes — this can take a few seconds.");
       try {
-        const recipes = await api.generateRecipes(detected, null);
+        const recipes = await api.generateRecipes(detected, selectedCuisine);
         state.setRecipes(recipes.recipes || recipes);
         state.go("recipes");
       } catch (e) {
@@ -91,7 +106,7 @@ export function mount(root) {
   voiceWrap.append(mic, transcript, ingredientsList);
 
   const wrap = document.createElement("div");
-  wrap.append(eyebrow, h2, sub, Bezel({ children: [voiceWrap] }), actions, reqStatus.el);
+  wrap.append(eyebrow, h2, sub, Bezel({ children: [voiceWrap] }), chipGroup, actions, reqStatus.el);
   root.append(wrap);
   enter(wrap);
 }

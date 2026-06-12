@@ -2,6 +2,7 @@ import os
 import re
 import json
 import base64
+import copy
 import math
 import time
 import logging
@@ -15,6 +16,7 @@ from pydantic import BaseModel
 from typing import Optional
 from PIL import Image
 from db import ensure_indexes
+from demo import DEMO_MODE, DEMO_RECIPES
 from routes_session import router as session_router
 from routes_qa import router as qa_router
 
@@ -89,6 +91,8 @@ def enrich_recipes(recipes):
 async def on_startup():
     await ensure_indexes()
     logger.info("=== GestuCook Backend Starting ===")
+    logger.info("DEMO_MODE = %s",
+                "ON - fixed recipes + cached salt answer" if DEMO_MODE else "off")
     logger.info("LLM_PROVIDER = %s", LLM_PROVIDER)
     if LLM_PROVIDER == "openai":
         logger.info("OPENAI_MODEL  = %s", OPENAI_MODEL)
@@ -511,6 +515,18 @@ async def detect(image: UploadFile = File(...)):
 
 @app.post("/api/recipes")
 async def recipes(req: HandsFreeRequest):
+    if DEMO_MODE:
+        logger.info("Recipes: DEMO fixture served (heard ingredients=%s cuisines=%s)",
+                    req.ingredients, req.cuisines)
+        start = time.time()
+        # deepcopy: enrich_recipes mutates steps in place and the module-level
+        # fixture must stay pristine across requests
+        data = enrich_recipes(copy.deepcopy(DEMO_RECIPES))
+        return {
+            "recipes": data.get("recipes", []),
+            "cost": estimate_cost(0, 0, LLM_PROVIDER),
+            "latency_ms": round((time.time() - start) * 1000),
+        }
     logger.info("Recipes: ingredients=%s cuisines=%s count=%d",
                 req.ingredients, req.cuisines, req.count or 3)
     start = time.time()

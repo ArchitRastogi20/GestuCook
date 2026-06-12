@@ -70,7 +70,7 @@
   --space-7: 56px;
 
   /* fonts */
-  --font-display: 'Fraunces', Georgia, serif;
-  --font-body:    'Geist', system-ui, sans-serif;
-  --font-mono:    'Geist Mono', ui-monospace, monospace;
+  --font-display: 'Fraunces', 'Noto Serif Devanagari', Georgia, serif;
+  --font-body:    'Geist', 'Noto Sans Devanagari', system-ui, sans-serif;
+  --font-mono:    'Geist Mono', 'Noto Sans Devanagari', ui-monospace, monospace;
 }

@@ -45,7 +45,10 @@ state.on("cost", (c) => {
   for (let attempt = 0; attempt < 6; attempt++) {
     try {
       const snap = await api.costSnapshot();
-      if (el) el.textContent = `${snap.provider || ""} · ${snap.model || ""}`.trim();
+      if (el) {
+        const audio = snap.audio_provider ? ` · audio:${snap.audio_provider}` : "";
+        el.textContent = `${snap.provider || ""} · ${snap.model || ""}${audio}`.trim();
+      }
       return;
     } catch {
       await new Promise(r => setTimeout(r, 700 * (attempt + 1)));

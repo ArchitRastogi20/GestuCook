@@ -8,6 +8,7 @@ import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
 import { tts } from "../audio.js";
 import { commands } from "../commands.js";
+import { t } from "../i18n.js";
 
 const GESTURE_ACTION = {
   swipe_right: "next", swipe_left: "back",
@@ -31,17 +32,17 @@ export async function mount(root) {
     const total = state.recipes.length;
     const r = state.recipes[i];
 
-    const eyebrow = Eyebrow({ text: `recipe ${String(i + 1).padStart(2, "0")} of ${String(total).padStart(2, "0")}` });
+    const eyebrow = Eyebrow({ text: t("rec.eyebrow", { i: String(i + 1).padStart(2, "0"), n: String(total).padStart(2, "0") }) });
 
     const h1 = document.createElement("h1");
     h1.className = "t-display-xl";
     h1.style.maxWidth = "16ch";
-    h1.innerHTML = `A weeknight <span class="italic">${r.cuisine || "dish"}</span>.`;
+    h1.innerHTML = t("rec.heading", { cuisine: r.cuisine || t("rec.dish") });
 
     const lede = document.createElement("p");
     lede.className = "t-body";
     lede.style.marginTop = "var(--space-4)";
-    lede.innerHTML = `${r.description || "Simple, hands-busy cooking."} <b>Swipe to browse, thumbs up to start cooking.</b>`;
+    lede.innerHTML = `${r.description || t("rec.ledeFallback")} ${t("rec.ledeHint")}`;
 
     const meta = document.createElement("div");
     meta.className = "recipe-meta";
@@ -49,7 +50,7 @@ export async function mount(root) {
     if (r.cuisine)    meta.append(Chip({ label: r.cuisine, variant: "copper" }));
     if (totalTime)    meta.append(Chip({ label: totalTime }));
     if (r.difficulty) meta.append(Chip({ label: r.difficulty, variant: "sage" }));
-    if (r.servings)   meta.append(Chip({ label: `${r.servings} servings` }));
+    if (r.servings)   meta.append(Chip({ label: t("rec.servings", { n: r.servings }) }));
 
     const title = document.createElement("h2");
     title.className = "recipe-title t-display-l";
@@ -71,24 +72,24 @@ export async function mount(root) {
     const cta = document.createElement("div");
     cta.className = "recipes-cta";
     cta.append(
-      Button({ label: "Start cooking", trailingIcon: "arrowRight", onClick: () => commands.dispatch("cook", "button") }),
-      Button({ label: "Read aloud",    intent: "ghost", onClick: () => commands.dispatch("read", "button") }),
-      Button({ label: "Practice gestures", intent: "ghost", onClick: () => commands.dispatch("trainer", "button") }),
+      Button({ label: t("rec.start"), trailingIcon: "arrowRight", onClick: () => commands.dispatch("cook", "button") }),
+      Button({ label: t("rec.read"),    intent: "ghost", onClick: () => commands.dispatch("read", "button") }),
+      Button({ label: t("rec.practice"), intent: "ghost", onClick: () => commands.dispatch("trainer", "button") }),
     );
 
     const featured = Bezel({ children: [meta, title, desc, ing, cta] });
 
     const cascade = Cascade({
       items: state.recipes.map((rr, idx) => ({
-        num: `recipe ${String(idx + 1).padStart(2, "0")}`,
+        num: t("rec.cardNum", { nn: String(idx + 1).padStart(2, "0") }),
         title: rr.name,
         footer: [rr.cuisine, rr.total_time || rr.time,
-                 rr.servings ? `${rr.servings} servings` : null].filter(Boolean),
+                 rr.servings ? t("rec.servings", { n: rr.servings }) : null].filter(Boolean),
       })),
       focusedIndex: i,
     });
 
-    const pip = PipFrame({ video: videoEl, canvas: canvasEl, status: "tracking", confidence: 0 });
+    const pip = PipFrame({ video: videoEl, canvas: canvasEl, status: t("hud.tracking"), confidence: 0 });
     const rightCol = document.createElement("div");
     rightCol.append(cascade, pip);
 
@@ -96,15 +97,15 @@ export async function mount(root) {
     stage.className = "recipes-stage";
     stage.append(featured, rightCol);
 
-    const hud = Hud({ status: "tracking", active: null });
+    const hud = Hud({ status: t("hud.tracking"), active: null });
 
     // Voice Q&A toggle lives here too, so it can be set while choosing a
     // recipe -- "on the main page, while starting the cooking part".
     const navControls = document.createElement("div");
     navControls.style.cssText = "display:flex; align-items:center; gap: var(--space-4);";
     navControls.append(
-      Toggle({ label: "Voice Q&A ✌", checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
-      Button({ label: "Home", intent: "ghost", onClick: () => commands.dispatch("home", "button") }),
+      Toggle({ label: t("common.voiceQA"), checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
+      Button({ label: t("common.home"), intent: "ghost", onClick: () => commands.dispatch("home", "button") }),
     );
     const header = ScreenHeader(eyebrow, navControls);
 
@@ -137,10 +138,10 @@ export async function mount(root) {
       case "pick": {
         if (pickA == null) {
           pickA = state.recipe_index;
-          tts.enqueue(`Selected ${state.recipes[pickA].name}. Swipe to pick a second, or thumbs up to cook just this one.`);
+          tts.enqueue(t("rec.ttsSelectedFirst", { name: state.recipes[pickA].name }));
         } else if (pickB == null && state.recipe_index !== pickA) {
           pickB = state.recipe_index;
-          tts.enqueue(`Selected ${state.recipes[pickB].name}. Thumbs up to cook both together.`);
+          tts.enqueue(t("rec.ttsSelectedSecond", { name: state.recipes[pickB].name }));
         }
         break;
       }

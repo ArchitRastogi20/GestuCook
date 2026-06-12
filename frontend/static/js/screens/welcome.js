@@ -1,34 +1,35 @@
 // frontend/static/js/screens/welcome.js
-import { Bezel, Button, Eyebrow } from "../ui/components.js";
+import { Bezel, Button, Eyebrow, Chip } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { enter } from "../ui/motion.js";
+import { t, LANGUAGES } from "../i18n.js";
 
 export function mount(root) {
   root.innerHTML = "";
   const wrap = document.createElement("div");
   wrap.className = "welcome-wrap";
 
-  const eyebrow = Eyebrow({ text: state.user ? `welcome back ${state.user.name}` : "welcome" });
+  const eyebrow = Eyebrow({ text: state.user ? t("welcome.back", { name: state.user.name }) : t("welcome.eyebrow") });
 
   const heading = document.createElement("h1");
   heading.innerHTML = state.user
-    ? `Pick up where you <span class="italic">left off</span>.`
-    : `Cook with your <span class="italic">hands</span>.`;
+    ? t("welcome.heading.returning")
+    : t("welcome.heading.new");
 
   const lede = document.createElement("p");
   lede.textContent = state.user
-    ? "Same name? Continue. Otherwise change it."
-    : "Tell us your name, then choose how you want to start. Voice or photo, either works.";
+    ? t("welcome.lede.returning")
+    : t("welcome.lede.new");
 
   const input = document.createElement("input");
   input.className = "welcome-input";
-  input.placeholder = "your name";
+  input.placeholder = t("welcome.namePlaceholder");
   input.value = state.user?.name || "";
   input.autocomplete = "off";
 
   const startBtn = Button({
-    label: state.user ? "Continue" : "Get started",
+    label: state.user ? t("welcome.continue") : t("welcome.getStarted"),
     trailingIcon: "arrowRight",
     onClick: () => onStart(),
   });
@@ -36,9 +37,27 @@ export function mount(root) {
   let switchUserLink = null;
   if (state.user) {
     switchUserLink = document.createElement("a");
-    switchUserLink.textContent = "not you?";
+    switchUserLink.textContent = t("welcome.notYou");
     switchUserLink.style.cssText = "color: var(--ink-3); font-size: 13px; cursor: pointer; text-decoration: underline;";
     switchUserLink.onclick = () => { state.clearUser(); input.value = ""; input.focus(); mount(root); };
+  }
+
+  // Language picker: selecting re-mounts this screen in the new language
+  // (welcome is the sanctioned self-remount exception, like "not you?").
+  const langRow = document.createElement("div");
+  langRow.className = "chip-group";
+  langRow.style.cssText = "justify-content:center; margin-top: var(--space-3);";
+  const langLabel = document.createElement("span");
+  langLabel.className = "t-eyebrow";
+  langLabel.style.cssText = "color: var(--ink-3); margin-right: 6px; align-self:center;";
+  langLabel.textContent = t("welcome.langLabel");
+  langRow.append(langLabel);
+  for (const l of LANGUAGES) {
+    const chip = Chip({ label: l.label });
+    chip.style.cursor = "pointer";
+    if (l.code === state.language) chip.classList.add("on");
+    chip.addEventListener("click", () => { state.setLanguage(l.code); mount(root); });
+    langRow.append(chip);
   }
 
   const actions = document.createElement("div");
@@ -46,7 +65,7 @@ export function mount(root) {
   actions.append(startBtn);
   if (switchUserLink) actions.append(switchUserLink);
 
-  const bezel = Bezel({ children: [eyebrow, heading, lede, input, actions] });
+  const bezel = Bezel({ children: [eyebrow, heading, lede, input, langRow, actions] });
   wrap.append(bezel);
   root.append(wrap);
   enter(wrap);

@@ -18,6 +18,7 @@ export class State {
     this.idle = false;              // auto-pause flag
     this.mode = "single";           // "single" | "parallel-2"
     this.voiceQA = localStorage.getItem("gestucook.voiceQA") !== "off";  // default on
+    this.language = localStorage.getItem("gestucook.lang") || "en";
     this.cost = { usd: 0, in: 0, out: 0 };
     this._listeners = new Map();
   }
@@ -58,6 +59,12 @@ export class State {
     this.voiceQA = !!v;
     try { localStorage.setItem("gestucook.voiceQA", v ? "on" : "off"); } catch {}
     this.emit("voiceQA", this.voiceQA);
+  }
+
+  setLanguage(code) {
+    this.language = code || "en";
+    try { localStorage.setItem("gestucook.lang", this.language); } catch {}
+    this.emit("language", this.language);
   }
 
   addCost(delta) {

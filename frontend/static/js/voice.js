@@ -14,6 +14,7 @@
 //   const text = await v.captureQuestion(5500)   // one-shot, for a Q&A window
 
 import { api } from "./api.js";
+import { state } from "./state.js";
 
 const GRAMMAR = [
   { action: "next",            patterns: [/^(next|next step|forward|continue|after this)$/i] },
@@ -28,10 +29,56 @@ const GRAMMAR = [
   { action: "save_moment",     patterns: [/^(save this|snapshot|moment|capture)$/i] },
 ];
 
-export function matchCommand(raw) {
+// Localized command words, merged with the English GRAMMAR: both always work.
+const GRAMMAR_LOCALIZED = {
+  hi: [
+    { action: "next",          patterns: [/^(अगला|आगे|अगला स्टेप|आगे बढ़ो)$/] },
+    { action: "back",          patterns: [/^(पीछे|वापस|पिछला)$/] },
+    { action: "repeat",        patterns: [/^(दोहराओ|फिर से|दोबारा)$/] },
+    { action: "pause",         patterns: [/^(रुको|रोको|ठहरो)$/] },
+    { action: "resume",        patterns: [/^(जारी रखो|चालू करो|आगे चलो)$/] },
+    { action: "ask",           patterns: [/^(सवाल|प्रश्न|मुझे सवाल पूछना है)$/] },
+    { action: "ambient_enter", patterns: [/^(किचन मोड|बड़ा मोड)$/] },
+    { action: "ambient_exit",  patterns: [/^(सामान्य मोड|किचन से बाहर)$/] },
+    { action: "trainer",       patterns: [/^(अभ्यास|ट्रेनर|इशारे सिखाओ)$/] },
+    { action: "save_moment",   patterns: [/^(सेव करो|स्नैपशॉट|यह सेव करो)$/] },
+  ],
+  it: [
+    { action: "next",          patterns: [/^(avanti|prossimo|prossimo passo)$/i] },
+    { action: "back",          patterns: [/^(indietro|precedente|torna indietro)$/i] },
+    { action: "repeat",        patterns: [/^(ripeti|ancora|di nuovo)$/i] },
+    { action: "pause",         patterns: [/^(pausa|fermati|aspetta)$/i] },
+    { action: "resume",        patterns: [/^(riprendi|continua)$/i] },
+    { action: "ask",           patterns: [/^(domanda|ho una domanda)$/i] },
+    { action: "ambient_enter", patterns: [/^(modalità cucina|schermo grande)$/i] },
+    { action: "ambient_exit",  patterns: [/^(modalità normale|schermo piccolo)$/i] },
+    { action: "trainer",       patterns: [/^(allenamento|gesti|allena i gesti)$/i] },
+    { action: "save_moment",   patterns: [/^(salva|salva questo|istantanea)$/i] },
+  ],
+  es: [
+    { action: "next",          patterns: [/^(siguiente|adelante|siguiente paso)$/i] },
+    { action: "back",          patterns: [/^(atrás|anterior|vuelve)$/i] },
+    { action: "repeat",        patterns: [/^(repite|otra vez|de nuevo)$/i] },
+    { action: "pause",         patterns: [/^(pausa|para|espera)$/i] },
+    { action: "resume",        patterns: [/^(continúa|sigue|reanuda)$/i] },
+    { action: "ask",           patterns: [/^(pregunta|tengo una pregunta)$/i] },
+    { action: "ambient_enter", patterns: [/^(modo cocina|pantalla grande)$/i] },
+    { action: "ambient_exit",  patterns: [/^(modo normal|pantalla pequeña)$/i] },
+    { action: "trainer",       patterns: [/^(entrenamiento|gestos|practicar gestos)$/i] },
+    { action: "save_moment",   patterns: [/^(guarda|guarda esto|captura)$/i] },
+  ],
+};
+
+export function matchCommand(raw, lang = state.language) {
   if (!raw) return null;
-  const text = raw.toLowerCase().replace(/^(uhh|um|hmm|so)\s+/, "").trim();
+  const text = raw.toLowerCase()
+    .replace(/^(uhh|um|hmm|so)\s+/, "")
+    .replace(/[.,!?।]+$/u, "")        // Whisper appends punctuation; "अगला।" must match "अगला"
+    .trim();
   for (const g of GRAMMAR) for (const p of g.patterns) if (p.test(text)) return { action: g.action, raw };
+  for (const g of GRAMMAR_LOCALIZED[lang] || []) {
+    for (const p of g.patterns) if (p.test(text)) return { action: g.action, raw };
+  }
   return null;
 }
 
@@ -79,7 +126,7 @@ export class VoiceLoop {
     this._rec.onstop = async () => {
       const blob = new Blob(chunks, { type: "audio/webm" });
       try {
-        const res = await api.transcribe(blob);
+        const res = await api.transcribe(blob, undefined, state.language);
         const text = (res?.text || "").trim();
         // Commands only. A non-command utterance is ignored -- questions are
         // captured by captureQuestion() during a gesture-gated Q&A window.
@@ -133,7 +180,7 @@ export class VoiceLoop {
     if (!chunks.length) return "";
     const blob = new Blob(chunks, { type: "audio/webm" });
     try {
-      const res = await api.transcribe(blob);
+      const res = await api.transcribe(blob, undefined, state.language);
       return (res?.text || "").trim();
     } catch {
       return "";

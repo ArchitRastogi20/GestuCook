@@ -10,19 +10,21 @@ import logging
 import traceback
 import httpx
 import tiktoken
+from datetime import datetime
 from io import BytesIO
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse, Response
 from pydantic import BaseModel
 from typing import Optional
 from PIL import Image
-from db import ensure_indexes
+from db import ensure_indexes, events
 from demo import (
     DEMO_MODE,
     DEMO_RECIPES,
     DEMO_INGREDIENTS_TEXT,
     DEMO_ASR_DELAY_SECONDS,
 )
+from langs import LANGUAGE_NAMES, SECOND_UNITS, MINUTE_UNITS, HOUR_UNITS, ALL_UNITS
 from routes_session import router as session_router
 from routes_qa import router as qa_router
 
@@ -41,16 +43,27 @@ OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
 ASR_URL = os.getenv("ASR_URL", "http://asr-service:8001")
 TTS_URL = os.getenv("TTS_URL", "http://tts-service:8002")
 
+AUDIO_PROVIDER = os.getenv("AUDIO_PROVIDER", "local").strip().lower()
+OPENAI_TRANSCRIBE_MODEL = os.getenv("OPENAI_TRANSCRIBE_MODEL", "gpt-4o-mini-transcribe")
+OPENAI_TTS_MODEL = os.getenv("OPENAI_TTS_MODEL", "gpt-4o-mini-tts")
+OPENAI_TTS_VOICE = os.getenv("OPENAI_TTS_VOICE", "marin")
+# Verified against the live pricing page 2026-06-12 (estimates for usage logging)
+ASR_USD_PER_MIN = 0.003
+TTS_USD_PER_MIN = 0.015
+
 TOKENIZER = tiktoken.get_encoding("o200k_base")
 
 
 # ── step duration helpers ─────────────────────────────────────
 
-_DUR_RE = re.compile(r"""
-    (?:for\s+|about\s+|~|approximately\s+)?
-    (\d{1,3})\s*
-    (s|sec|secs|second|seconds|m|min|mins|minute|minutes|hr|hrs|hour|hours)\b
-""", re.I | re.X)
+# Unit alternation is rebuilt from langs.py so localized recipe steps
+# ("per 4 minuti", "लगभग 4 मिनट") still produce step timers. Longest-first so
+# "मिनटों" wins over "मिनट" and "minutes" over "min".
+_UNIT_ALT = "|".join(sorted((re.escape(u) for u in ALL_UNITS), key=len, reverse=True))
+_DUR_RE = re.compile(
+    r"(?:for\s+|about\s+|~|approximately\s+)?(\d{1,3})\s*(" + _UNIT_ALT + r")\b",
+    re.I,
+)
 
 
 def parse_step_duration(text: str):
@@ -61,13 +74,13 @@ def parse_step_duration(text: str):
         return None
     n = int(m.group(1))
     unit = m.group(2).lower()
-    if unit.startswith("s") and not unit.startswith("se"):
+    # Membership sets, not first-letter heuristics: Devanagari units have no
+    # useful "first letter" and Italian "ora" must not be guessed at.
+    if unit in SECOND_UNITS:
         return n
-    if unit.startswith("se"):
-        return n
-    if unit.startswith("m"):
+    if unit in MINUTE_UNITS:
         return n * 60
-    if unit.startswith("h"):
+    if unit in HOUR_UNITS:
         return n * 3600
     return None
 
@@ -99,6 +112,9 @@ async def on_startup():
     logger.info("=== GestuCook Backend Starting ===")
     logger.info("DEMO_MODE = %s",
                 "ON - fixed recipes + cached salt answer" if DEMO_MODE else "off")
+    logger.info("AUDIO_PROVIDER = %s%s", AUDIO_PROVIDER,
+                f" ({OPENAI_TRANSCRIBE_MODEL} / {OPENAI_TTS_MODEL} voice={OPENAI_TTS_VOICE})"
+                if AUDIO_PROVIDER == "openai" else "")
     logger.info("LLM_PROVIDER = %s", LLM_PROVIDER)
     if LLM_PROVIDER == "openai":
         logger.info("OPENAI_MODEL  = %s", OPENAI_MODEL)
@@ -410,10 +426,19 @@ def extract_recipe_json(raw: str):
         return None
 
 
+LANGUAGE_PROMPT_LINE = (
+    "Write every human-readable text value (name, description, long_description, "
+    "difficulty, prep_time, cook_time, total_time, ingredient names and qty, every step) "
+    "in {lang}. Keep all JSON keys in English. Use Western Arabic numerals (1, 2, 3) "
+    "for all numbers and times."
+)
+
+
 async def generate_recipes(
     ingredients: list[str],
     cuisines: list[str] | None = None,
     count: int = 3,
+    language: str = "en",
 ) -> tuple[dict, dict]:
     cuisine_line = ""
     if cuisines and len(cuisines) > 0 and cuisines[0]:
@@ -424,6 +449,9 @@ async def generate_recipes(
         ingredients=", ".join(ingredients),
         cuisine_line=cuisine_line,
     )
+    if language and language != "en":
+        prompt += "\n" + LANGUAGE_PROMPT_LINE.format(
+            lang=LANGUAGE_NAMES.get(language, "English"))
 
     base_messages = [
         {"role": "system", "content": RECIPE_SYSTEM},
@@ -456,6 +484,36 @@ async def generate_recipes(
     return {"recipes": [], "error": "Failed to parse recipes"}, result.get("usage", {})
 
 
+# ── audio usage logging (best-effort, OpenAI provider only) ──
+
+def _wav_seconds(wav: bytes) -> float:
+    """Duration from a canonical RIFF header: byte-rate field at offset 28."""
+    try:
+        byte_rate = int.from_bytes(wav[28:32], "little")
+        return max(0.0, (len(wav) - 44) / byte_rate) if byte_rate else 0.0
+    except Exception:
+        return 0.0
+
+
+async def _log_audio_usage(op: str, seconds_est: float, language: str | None = None):
+    try:
+        rate = ASR_USD_PER_MIN if op == "asr" else TTS_USD_PER_MIN
+        await events.insert_one({
+            "session_id": None,
+            "ts": datetime.utcnow(),
+            "kind": "audio_usage",
+            "data": {
+                "provider": "openai",
+                "op": op,
+                "seconds_est": round(seconds_est, 2),
+                "cost_est_usd": round(seconds_est / 60.0 * rate, 6),
+                "language": language,
+            },
+        })
+    except Exception:
+        pass
+
+
 # ── API routes ────────────────────────────────────────────────
 
 @app.get("/api/health")
@@ -468,6 +526,7 @@ async def config():
     return {
         "provider": LLM_PROVIDER,
         "model": OPENAI_MODEL if LLM_PROVIDER == "openai" else OPENROUTER_MODEL,
+        "audio_provider": AUDIO_PROVIDER,
     }
 
 
@@ -475,6 +534,7 @@ class HandsFreeRequest(BaseModel):
     ingredients: list[str]
     cuisines: Optional[list[str]] = None
     count: Optional[int] = 3
+    language: Optional[str] = "en"
 
 
 @app.post("/api/detect")
@@ -521,7 +581,7 @@ async def detect(image: UploadFile = File(...)):
 
 @app.post("/api/recipes")
 async def recipes(req: HandsFreeRequest):
-    if DEMO_MODE:
+    if DEMO_MODE and (req.language in (None, "en")):
         logger.info("Recipes: DEMO fixture served (heard ingredients=%s cuisines=%s)",
                     req.ingredients, req.cuisines)
         start = time.time()
@@ -538,7 +598,8 @@ async def recipes(req: HandsFreeRequest):
     start = time.time()
 
     try:
-        data, usage = await generate_recipes(req.ingredients, req.cuisines, req.count or 3)
+        data, usage = await generate_recipes(req.ingredients, req.cuisines,
+                                             req.count or 3, req.language or "en")
     except HTTPException:
         raise
     except Exception as e:
@@ -569,16 +630,37 @@ async def recipes(req: HandsFreeRequest):
 
 
 @app.post("/api/asr")
-async def asr(audio: UploadFile = File(...), purpose: Optional[str] = Form(None)):
+async def asr(audio: UploadFile = File(...), purpose: Optional[str] = Form(None),
+              language: Optional[str] = Form(None)):
     contents = await audio.read()
-    logger.info("ASR: file=%s size=%d purpose=%s", audio.filename, len(contents), purpose)
-    # Demo mode scripts ONLY the hands-free ingredient capture (the screen tags
-    # it with purpose=ingredients). Voice commands and Q&A questions also pass
-    # through this route and must keep hitting the real ASR.
-    if DEMO_MODE and purpose == "ingredients":
+    logger.info("ASR: file=%s size=%d purpose=%s lang=%s",
+                audio.filename, len(contents), purpose, language)
+    # Demo mode scripts ONLY the English hands-free ingredient capture. Voice
+    # commands and Q&A questions also pass through this route and must keep
+    # hitting the real ASR, and a non-English session is always live.
+    if DEMO_MODE and purpose == "ingredients" and (language in (None, "en")):
         await asyncio.sleep(DEMO_ASR_DELAY_SECONDS)
         logger.info("ASR: DEMO scripted ingredients served")
         return {"text": DEMO_INGREDIENTS_TEXT, "language": "en", "language_probability": 1.0}
+
+    if AUDIO_PROVIDER == "openai":
+        data = {"model": OPENAI_TRANSCRIBE_MODEL, "response_format": "json"}
+        if language in LANGUAGE_NAMES:
+            data["language"] = language       # accuracy hint, ISO-639-1
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                data=data,
+                files={"file": (audio.filename or "audio.webm", contents,
+                                audio.content_type or "audio/webm")},
+            )
+        if resp.status_code != 200:
+            logger.error("OpenAI ASR error %d: %s", resp.status_code, resp.text[:200])
+            raise HTTPException(status_code=502, detail="ASR service error")
+        await _log_audio_usage("asr", len(contents) / 4000.0, language)  # webm/opus ~ 4 kB/s
+        return {"text": resp.json().get("text", "")}
+
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
             f"{ASR_URL}/transcribe",
@@ -592,7 +674,21 @@ async def asr(audio: UploadFile = File(...), purpose: Optional[str] = Form(None)
 
 @app.post("/api/tts")
 async def tts(text: str = Form(...)):
-    logger.info("TTS: text_len=%d", len(text))
+    logger.info("TTS: text_len=%d provider=%s", len(text), AUDIO_PROVIDER)
+    if AUDIO_PROVIDER == "openai":
+        async with httpx.AsyncClient(timeout=60) as client:
+            resp = await client.post(
+                "https://api.openai.com/v1/audio/speech",
+                headers={"Authorization": f"Bearer {OPENAI_API_KEY}"},
+                json={"model": OPENAI_TTS_MODEL, "voice": OPENAI_TTS_VOICE,
+                      "input": text, "response_format": "wav"},
+            )
+        if resp.status_code != 200:
+            logger.error("OpenAI TTS error %d: %s", resp.status_code, resp.text[:200])
+            raise HTTPException(status_code=502, detail="TTS service error")
+        await _log_audio_usage("tts", _wav_seconds(resp.content))
+        return Response(content=resp.content, media_type="audio/wav")
+
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(f"{TTS_URL}/speak", data={"text": text})
     if resp.status_code != 200:

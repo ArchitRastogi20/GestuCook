@@ -7,10 +7,12 @@ import httpx
 from bson import ObjectId
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 import tiktoken
 
 from db import events
 from demo import DEMO_MODE, match_demo_qa
+from langs import LANGUAGE_NAMES
 
 router = APIRouter(prefix="/api", tags=["qa"])
 logger = logging.getLogger("gestucook")
@@ -23,6 +25,7 @@ class QABody(BaseModel):
     current_recipe: dict
     current_step_index: int
     question: str
+    language: Optional[str] = "en"
 
 
 PROVIDER = os.environ.get("LLM_PROVIDER", "openrouter").lower()
@@ -75,7 +78,7 @@ async def _log_qa_event(session_id, question, answer, cost, n_in, n_out, demo=Fa
 
 @router.post("/qa")
 async def qa(body: QABody):
-    if DEMO_MODE:
+    if DEMO_MODE and (body.language in (None, "en")):
         cached = match_demo_qa(body.question)
         if cached:
             logger.info("QA: DEMO cached answer served for %.80r", body.question)
@@ -88,6 +91,8 @@ async def qa(body: QABody):
     if isinstance(cur, dict):
         cur = cur.get("text", "")
     prompt = PROMPT_TMPL.format(title=title, step=cur, q=body.question.strip())
+    if body.language and body.language != "en":
+        prompt += f"\nAnswer in {LANGUAGE_NAMES.get(body.language, 'English')}."
 
     enc = tiktoken.get_encoding("o200k_base")
     n_in = len(enc.encode(prompt))

@@ -8,13 +8,7 @@ import { api } from "../api.js";
 import { tts } from "../audio.js";
 import { enter } from "../ui/motion.js";
 import { GestureEngine, TO_ACTION } from "../gestures.js";
-const STEPS = [
-  { name: "Thumb_Up",    label: "thumbs up",   prompt: "Show me a thumbs up." },
-  { name: "Closed_Fist", label: "closed fist", prompt: "Now a closed fist." },
-  { name: "Open_Palm",   label: "open palm",   prompt: "Now an open palm." },
-  { name: "Victory",     label: "peace sign",  prompt: "Now a peace sign. This is how you ask a question while cooking." },
-  { name: "Pointing_Up", label: "point up",    prompt: "Now point your index finger up." },
-];
+import { t } from "../i18n.js";
 
 export async function mount(root) {
   GestureEngine.stop();   // tear down any stream a previous screen left running
@@ -22,10 +16,19 @@ export async function mount(root) {
   let idx = 0;
   let done = false;
 
+  // Built per-mount so labels/prompts localize to the session language.
+  const STEPS = [
+    { name: "Thumb_Up",    label: t("tr.thumbs.label"),  prompt: t("tr.thumbs.prompt") },
+    { name: "Closed_Fist", label: t("tr.fist.label"),    prompt: t("tr.fist.prompt") },
+    { name: "Open_Palm",   label: t("tr.palm.label"),    prompt: t("tr.palm.prompt") },
+    { name: "Victory",     label: t("tr.victory.label"), prompt: t("tr.victory.prompt") },
+    { name: "Pointing_Up", label: t("tr.point.label"),   prompt: t("tr.point.prompt") },
+  ];
+
   const wrap = document.createElement("div");
   wrap.className = "trainer-wrap";
 
-  const eyebrow = Eyebrow({ text: "gesture trainer" });
+  const eyebrow = Eyebrow({ text: t("tr.eyebrow") });
   const h1 = document.createElement("h2");
   const p  = document.createElement("p");
   const bar = document.createElement("div"); bar.className = "trainer-conf";
@@ -33,8 +36,8 @@ export async function mount(root) {
   const cta = document.createElement("div");
   cta.style.cssText = "margin-top: var(--space-5); display:flex; gap: var(--space-3);";
   cta.append(
-    Button({ label: "Skip", intent: "ghost", onClick: () => finish(false) }),
-    Button({ label: "Exit", intent: "ghost", onClick: () => finish(false) }),
+    Button({ label: t("tr.skip"), intent: "ghost", onClick: () => finish(false) }),
+    Button({ label: t("tr.exit"), intent: "ghost", onClick: () => finish(false) }),
   );
   const promptCol = document.createElement("div"); promptCol.className = "trainer-prompt";
   promptCol.append(h1, p, bar, cta);
@@ -76,7 +79,7 @@ export async function mount(root) {
   function onGesture(g) {
     if (done) return;
     if (g !== TO_ACTION[STEPS[idx].name]) return;
-    tts.enqueue("Got it.");
+    tts.enqueue(t("tr.ttsGot"));
     if (idx + 1 < STEPS.length) setStep(idx + 1);
     else finish(true);
   }
@@ -87,7 +90,7 @@ export async function mount(root) {
     GestureEngine.stop();
     if (completed && state.user?.name) {
       try { await api.session.trainerCompleted(state.user.name); } catch {}
-      tts.enqueue("All gestures learned. Nicely done.");
+      tts.enqueue(t("tr.ttsDone"));
     }
     state.go("recipes");
   }

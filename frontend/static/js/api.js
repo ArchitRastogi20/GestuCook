@@ -41,9 +41,12 @@ export const api = {
     const cuisines = cuisine ? [cuisine] : null;
     return jsonPost("/recipes", { ingredients, cuisines });
   },
-  transcribe(blob) {
+  // purpose (optional) tags what the audio is for (e.g. "ingredients") so the
+  // backend can treat captures differently; omitted for commands/questions.
+  transcribe(blob, purpose) {
     const fd = new FormData();
     fd.append("audio", blob, "audio.webm");
+    if (purpose) fd.append("purpose", purpose);
     return fetch(`${BASE}/asr`, { method: "POST", body: fd }).then(r => r.json());
   },
   speak(text) {

@@ -1,6 +1,7 @@
 import os
 import re
 import json
+import asyncio
 import base64
 import copy
 import math
@@ -16,7 +17,12 @@ from pydantic import BaseModel
 from typing import Optional
 from PIL import Image
 from db import ensure_indexes
-from demo import DEMO_MODE, DEMO_RECIPES
+from demo import (
+    DEMO_MODE,
+    DEMO_RECIPES,
+    DEMO_INGREDIENTS_TEXT,
+    DEMO_ASR_DELAY_SECONDS,
+)
 from routes_session import router as session_router
 from routes_qa import router as qa_router
 
@@ -563,9 +569,16 @@ async def recipes(req: HandsFreeRequest):
 
 
 @app.post("/api/asr")
-async def asr(audio: UploadFile = File(...)):
+async def asr(audio: UploadFile = File(...), purpose: Optional[str] = Form(None)):
     contents = await audio.read()
-    logger.info("ASR: file=%s size=%d", audio.filename, len(contents))
+    logger.info("ASR: file=%s size=%d purpose=%s", audio.filename, len(contents), purpose)
+    # Demo mode scripts ONLY the hands-free ingredient capture (the screen tags
+    # it with purpose=ingredients). Voice commands and Q&A questions also pass
+    # through this route and must keep hitting the real ASR.
+    if DEMO_MODE and purpose == "ingredients":
+        await asyncio.sleep(DEMO_ASR_DELAY_SECONDS)
+        logger.info("ASR: DEMO scripted ingredients served")
+        return {"text": DEMO_INGREDIENTS_TEXT, "language": "en", "language_probability": 1.0}
     async with httpx.AsyncClient(timeout=60) as client:
         resp = await client.post(
             f"{ASR_URL}/transcribe",

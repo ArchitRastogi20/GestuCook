@@ -88,7 +88,7 @@ export function mount(root) {
       rec.onstop = async () => {
         const blob = new Blob(chunks, { type: "audio/webm" });
         stream.getTracks().forEach(t => t.stop());
-        const res = await api.transcribe(blob);
+        const res = await api.transcribe(blob, "ingredients");
         transcript.textContent = res.text || "(nothing heard)";
         // naive ingredient extraction: split on commas and `and`
         detected = (res.text || "").split(/,| and /).map(s => s.trim()).filter(Boolean);

@@ -3,6 +3,7 @@
 
 import { state } from "./state.js";
 import { api } from "./api.js";
+import { tts } from "./audio.js";
 import { mountDiag } from "./ui/diag.js";
 
 import * as welcome from "./screens/welcome.js";
@@ -29,6 +30,10 @@ state.on("screen", async (name) => {
 // initial screen: if user already exists in localStorage, skip welcome
 if (state.user) state.go("welcome");  // still show "welcome back" UX
 else            state.go("welcome");
+
+// the brand dot breathes while the kitchen speaks — system voice made visible
+const brandDot = document.querySelector("#brand-dot");
+if (brandDot) tts.onPlayingChange((p) => brandDot.classList.toggle("speaking", p));
 
 // cost counter
 state.on("cost", (c) => {

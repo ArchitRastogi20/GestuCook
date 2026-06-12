@@ -1,4 +1,6 @@
-/* Design tokens. Single source of truth for color, type, spacing, motion. */
+/* Design tokens — "Gallery" system. Museum-white plane, ink typography,
+   one vermilion accent reserved for live/active state. No shadows, no fills,
+   radius 0 except true pills. */
 
 @font-face {
   font-family: 'Fraunces';
@@ -30,44 +32,46 @@
 }
 
 :root {
-  /* color — OKLCH, no pure #000 or #fff */
-  --bg:        oklch(0.972 0.012 78);
-  --bg-2:      oklch(0.945 0.018 78);
-  --paper:     oklch(0.985 0.008 80);
-  --ink:       oklch(0.265 0.018 60);
-  --ink-2:     oklch(0.46 0.022 64);
-  --ink-3:     oklch(0.62 0.022 70);
-  --rule:      oklch(0.86 0.02 75);
-  --hairline:  rgba(125,95,55,0.16);
-  --copper:    oklch(0.60 0.115 52);
-  --copper-2:  oklch(0.70 0.090 56);
-  --sage:      oklch(0.66 0.046 142);
-  --shell:     rgba(125,95,55,0.045);
+  /* color — gallery white + ink; ONE accent for state */
+  --bg:        oklch(0.988 0.003 90);
+  --bg-2:      oklch(0.955 0.004 90);
+  --paper:     oklch(0.988 0.003 90);
+  --ink:       oklch(0.18 0.006 80);
+  --ink-2:     oklch(0.42 0.007 80);
+  --ink-3:     oklch(0.60 0.007 80);
+  --rule:      oklch(0.90 0.004 85);
+  --hairline:  rgba(22, 20, 16, 0.14);
 
-  /* shadows */
-  --inset-hi:  inset 0 1px 0 rgba(255,252,244,0.9);
-  --shadow-amb: 0 30px 60px -30px rgba(60,38,12,0.18),
-                0 8px 24px -8px rgba(60,38,12,0.08);
-  --shadow-soft: 0 10px 30px -16px rgba(60,38,12,0.10);
+  --accent:    oklch(0.60 0.20 35);   /* vermilion — live/active state only */
+  /* legacy hooks: copper now IS the accent; sage recedes to warm gray */
+  --copper:    var(--accent);
+  --copper-2:  oklch(0.70 0.15 35);
+  --sage:      oklch(0.55 0.01 80);
+  --shell:     transparent;
+
+  /* shadows — none in the Gallery system */
+  --inset-hi:  none;
+  --shadow-amb: none;
+  --shadow-soft: none;
 
   /* motion */
   --t-spring: 700ms cubic-bezier(0.32, 0.72, 0, 1);
   --t-quart:  500ms cubic-bezier(0.25, 1, 0.5, 1);
 
-  /* shape */
-  --r-outer: 28px;
-  --r-inner: 22px;
+  /* shape — flat; pills only for true pills */
+  --r-outer: 0px;
+  --r-inner: 0px;
   --r-pill:  999px;
-  --r-sm:    13px;
+  --r-sm:    0px;
 
-  /* spacing */
+  /* spacing — more air */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
   --space-5: 24px;
-  --space-6: 36px;
-  --space-7: 56px;
+  --space-6: 40px;
+  --space-7: 72px;
 
   /* fonts */
   --font-display: 'Fraunces', 'Noto Serif Devanagari', Georgia, serif;

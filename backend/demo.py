@@ -133,10 +133,10 @@ DEMO_RECIPES = {
 }
 
 # Spoken-ingredient fixture for the hands-free screen. handsfree.js splits the
-# transcript on commas/" and ", so this exact string renders as four chips in
+# transcript on commas/" and ", so this exact string renders as six chips in
 # this order. The delay makes the scripted transcription land a beat after the
 # mic is released instead of suspiciously instantly.
-DEMO_INGREDIENTS_TEXT = "onions, potatoes, garlic, rice"
+DEMO_INGREDIENTS_TEXT = "onions, potatoes, garlic, French beans, carrots and rice"
 DEMO_ASR_DELAY_SECONDS = 1.0
 
 DEMO_QA_SALT_ANSWER = (

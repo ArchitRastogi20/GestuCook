@@ -4,25 +4,26 @@ import { state } from "../state.js";
 import { api } from "../api.js";
 import { enter } from "../ui/motion.js";
 import { svg, ICONS } from "../ui/icons.js";
+import { t } from "../i18n.js";
 
 export function mount(root) {
   root.innerHTML = "";
 
-  const eyebrow = Eyebrow({ text: "step 2 · upload ingredients" });
+  const eyebrow = Eyebrow({ text: t("photo.eyebrow") });
   const h2 = document.createElement("h2");
   h2.className = "t-display-l";
   h2.style.cssText = "text-align:center; margin-bottom: var(--space-3);";
-  h2.innerHTML = `What's on your <span class="italic">counter</span>?`;
+  h2.innerHTML = t("photo.heading");
 
   const sub = document.createElement("p");
   sub.className = "t-body";
   sub.style.cssText = "text-align:center; margin: 0 auto var(--space-6);";
-  sub.textContent = "Take photos, then optionally pick a cuisine.";
+  sub.textContent = t("photo.sub");
 
   const zoneInner = document.createElement("div");
   zoneInner.className = "upload-zone";
   const ic = svg(ICONS.camera, { size: 36, stroke: 1.4 }); ic.classList.add("icon");
-  const lbl = document.createElement("p"); lbl.textContent = "Click or drag images here";
+  const lbl = document.createElement("p"); lbl.textContent = t("photo.dropzone");
   zoneInner.append(ic, lbl);
   const zone = Bezel({ children: [zoneInner] });
 
@@ -35,8 +36,9 @@ export function mount(root) {
   const chipGroup = document.createElement("div");
   chipGroup.className = "chip-group";
   let selectedCuisine = null;
+  // Labels localize; the value sent to the backend stays the English name.
   for (const c of ["Italian", "Indian", "Chinese", "American", "Turkish", "Any"]) {
-    const chip = Chip({ label: c });
+    const chip = Chip({ label: t(`cuisine.${c}`) });
     chip.dataset.cuisine = c;
     chip.style.cursor = "pointer";
     chip.addEventListener("click", () => {
@@ -51,33 +53,33 @@ export function mount(root) {
 
   let files = [];
   const detectBtn = Button({
-    label: "Detect & get recipes",
+    label: t("photo.detect"),
     trailingIcon: "arrowRight",
     onClick: async () => {
       if (!files.length || detectBtn.disabled) return;
-      setLoading(detectBtn, true, "Detecting…");
-      reqStatus.send("Request sent", "Detecting ingredients from your photos…");
+      setLoading(detectBtn, true, t("photo.detecting"));
+      reqStatus.send(t("common.requestSent"), t("photo.sentSub"));
       try {
         const det = await api.detectIngredients(files, selectedCuisine);
         if (!det.ingredients.length) {
           setLoading(detectBtn, false);
-          reqStatus.fail("Nothing detected", "No ingredients found — try clearer or closer photos.");
+          reqStatus.fail(t("photo.nothingTitle"), t("photo.nothingSub"));
           return;
         }
-        setLoading(detectBtn, true, "Generating…");
-        reqStatus.update(`Found ${det.ingredients.length} ingredient(s). Generating recipes — this can take a few seconds.`);
-        const recipes = await api.generateRecipes(det.ingredients, selectedCuisine);
+        setLoading(detectBtn, true, t("photo.generating"));
+        reqStatus.update(t("photo.foundSub", { n: det.ingredients.length }));
+        const recipes = await api.generateRecipes(det.ingredients, selectedCuisine, state.language);
         state.setRecipes(recipes.recipes || recipes);
         state.go("recipes");
       } catch (e) {
         setLoading(detectBtn, false);
-        reqStatus.fail("Request failed", "Couldn't detect or generate. Check the backend is running, then try again.");
+        reqStatus.fail(t("photo.failedTitle"), t("photo.failedSub"));
       }
     },
   });
   detectBtn.disabled = true;
 
-  const back = Button({ label: "Back", intent: "ghost", onClick: () => state.go("mode") });
+  const back = Button({ label: t("common.back"), intent: "ghost", onClick: () => state.go("mode") });
 
   const actions = document.createElement("div");
   actions.style.cssText = "display:flex; gap: var(--space-3); justify-content:center; margin-top: var(--space-5);";

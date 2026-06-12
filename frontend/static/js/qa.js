@@ -13,6 +13,7 @@ import { api } from "./api.js";
 import { tts, chime } from "./audio.js";
 import { state } from "./state.js";
 import { looksLikeQuestion } from "./voice.js";
+import { t } from "./i18n.js";
 
 let active = false;
 
@@ -30,7 +31,7 @@ export async function runQaSession({ voice, getRecipe, getStep, overlay, listenM
 
   // Master toggle: the feature is switched off on the cooking / recipes screen.
   if (!state.voiceQA) {
-    tts.enqueue("Voice Q and A is off. Switch it on to ask a question.");
+    tts.enqueue(t("qa.off"));
     return;
   }
   if (!voice || typeof voice.captureQuestion !== "function") return;
@@ -43,14 +44,14 @@ export async function runQaSession({ voice, getRecipe, getStep, overlay, listenM
 
     const question = await voice.captureQuestion(listenMs);
     if (!looksLikeQuestion(question)) {
-      overlay && overlay.error("Didn't catch that");
-      tts.enqueue("Sorry, I didn't catch that. Make the peace sign to try again.");
+      overlay && overlay.error(t("qa.didntCatchShort"));
+      tts.enqueue(t("qa.ttsDidntCatch"));
       return;
     }
 
     const recipe = getRecipe ? getRecipe() : null;
     if (!recipe) {
-      overlay && overlay.error("No recipe loaded");
+      overlay && overlay.error(t("qa.noRecipe"));
       return;
     }
     overlay && overlay.thinking(question);
@@ -60,14 +61,15 @@ export async function runQaSession({ voice, getRecipe, getStep, overlay, listenM
       current_recipe: recipe,
       current_step_index: getStep ? getStep() : 0,
       question,
+      language: state.language,
     });
     state.addCost({ usd: res.cost_delta_usd, in: res.tokens_in, out: res.tokens_out });
     state._qaCount = (state._qaCount || 0) + 1;
     overlay && overlay.answer(res.answer);
     tts.enqueue(res.answer);
   } catch {
-    overlay && overlay.error("Couldn't answer that");
-    tts.enqueue("Sorry, I couldn't answer that.");
+    overlay && overlay.error(t("qa.cantAnswerShort"));
+    tts.enqueue(t("qa.ttsCantAnswer"));
   } finally {
     // Live Q&A disarms automatically -- the next peace sign starts a new one.
     active = false;

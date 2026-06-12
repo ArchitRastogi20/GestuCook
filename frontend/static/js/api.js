@@ -37,13 +37,18 @@ export const api = {
     }
     return { ingredients: [...new Set(all.map(s => String(s).trim()).filter(Boolean))] };
   },
-  generateRecipes(ingredients, cuisine) {
+  generateRecipes(ingredients, cuisine, language) {
     const cuisines = cuisine ? [cuisine] : null;
-    return jsonPost("/recipes", { ingredients, cuisines });
+    return jsonPost("/recipes", { ingredients, cuisines, language: language || "en" });
   },
-  transcribe(blob) {
+  // purpose (optional) tags what the audio is for (e.g. "ingredients") so the
+  // backend can treat captures differently; omitted for commands/questions.
+  // language (optional) is an accuracy hint for the OpenAI transcriber.
+  transcribe(blob, purpose, language) {
     const fd = new FormData();
     fd.append("audio", blob, "audio.webm");
+    if (purpose) fd.append("purpose", purpose);
+    if (language) fd.append("language", language);
     return fetch(`${BASE}/asr`, { method: "POST", body: fd }).then(r => r.json());
   },
   speak(text) {

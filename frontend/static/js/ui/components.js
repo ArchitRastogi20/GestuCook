@@ -1,6 +1,7 @@
 // frontend/static/js/ui/components.js
 import { svg, ICONS } from "./icons.js";
 import { magnetic } from "./motion.js";
+import { t } from "../i18n.js";
 
 function el(tag, opts = {}, children = []) {
   const n = document.createElement(tag);
@@ -79,19 +80,20 @@ export function RequestStatus() {
   return {
     el: root,
     // request fired -- play the checkmark draw-in
-    send(t = "Request sent", s = "") {
+    // (param named t_ because t is the i18n helper)
+    send(t_ = t("common.requestSent"), s = "") {
       root.classList.remove("error", "sent");
       root.style.display = "flex";
       void root.offsetWidth;                       // restart the draw animation
       root.classList.add("show", "sent", "working");
-      title.textContent = t; sub.textContent = s;
+      title.textContent = t_; sub.textContent = s;
     },
     update(s) { sub.textContent = s; },            // advance the working sub-text
-    fail(t = "Something went wrong", s = "") {
+    fail(t_ = t("common.wrong"), s = "") {
       root.style.display = "flex";
       root.classList.remove("working");
       root.classList.add("show", "error");
-      title.textContent = t; sub.textContent = s;
+      title.textContent = t_; sub.textContent = s;
     },
   };
 }
@@ -164,26 +166,27 @@ export function PipFrame({ video, canvas, status = "tracking", confidence = 0 } 
   return el("div", { cls: "pip" }, [frame, label]);
 }
 
-const HUD_PILLS = [
-  { key: "swipe_left",  label: "swipe ←" },
-  { key: "swipe_right", label: "swipe →" },
-  { key: "thumbs_up",   label: "thumbs up" },
-  { key: "fist",        label: "fist" },
-  { key: "open_palm",   label: "open palm" },
-  { key: "victory",     label: "✌ ask" },
+// A function, not a constant: pill labels must localize at render time.
+const HUD_PILLS = () => [
+  { key: "swipe_left",  label: t("hud.swipeLeft") },
+  { key: "swipe_right", label: t("hud.swipeRight") },
+  { key: "thumbs_up",   label: t("hud.thumbs") },
+  { key: "fist",        label: t("hud.fist") },
+  { key: "open_palm",   label: t("hud.palm") },
+  { key: "victory",     label: t("hud.ask") },
 ];
 
 export function Hud({ status = "tracking", active = null, timer = null, locked = false } = {}) {
   const statusEl = el("span", { cls: "status", text: status });
   const sep = el("span", { cls: "sep" });
   const pills = el("div", { cls: "gest-pills" });
-  for (const p of HUD_PILLS) {
+  for (const p of HUD_PILLS()) {
     const cls = "gp" + (p.key === active ? " on" : "");
     pills.appendChild(el("span", { cls, text: p.label, attrs: { "data-gesture": p.key } }));
   }
   const items = [statusEl, sep, pills];
   if (timer != null) items.push(el("span", { cls: "sep" }), el("span", { cls: "timer", text: timer }));
-  if (locked) items.push(el("span", { cls: "sep" }), el("span", { cls: "lock", text: "LOCKED" }));
+  if (locked) items.push(el("span", { cls: "sep" }), el("span", { cls: "lock", text: t("hud.locked") }));
   return Capsule({ position: "bottom", items });
 }
 
@@ -247,9 +250,9 @@ export function QaOverlay() {
     listening(ms = 5500) {
       clearTimers();
       setState("listening");
-      eyebrow.textContent = "listening";
-      title.textContent = "Ask your question";
-      body.textContent  = "Speak now, then wait for the answer.";
+      eyebrow.textContent = t("qa.listening");
+      title.textContent = t("qa.askTitle");
+      body.textContent  = t("qa.speakNow");
       // deplete the ring over `ms` via a single CSS transition
       ringFg.style.transition = "none";
       ringFg.style.strokeDashoffset = "0";
@@ -267,14 +270,14 @@ export function QaOverlay() {
     thinking(question) {
       clearTimers();
       setState("thinking");
-      eyebrow.textContent = "thinking";
+      eyebrow.textContent = t("qa.thinking");
       title.textContent = question || "...";
       body.textContent  = "";
     },
     answer(text) {
       clearTimers();
       setState("answer");
-      eyebrow.textContent = "answer";
+      eyebrow.textContent = t("qa.answer");
       title.textContent = text || "";
       body.textContent  = "";
       // hold on screen roughly as long as it takes to read the answer aloud
@@ -284,8 +287,8 @@ export function QaOverlay() {
     error(text) {
       clearTimers();
       setState("error");
-      eyebrow.textContent = "voice Q&A";
-      title.textContent = text || "Something went wrong";
+      eyebrow.textContent = t("qa.title");
+      title.textContent = text || t("common.wrong");
       body.textContent  = "";
       dismissT = setTimeout(() => ctl.dismiss(), 3200);
     },

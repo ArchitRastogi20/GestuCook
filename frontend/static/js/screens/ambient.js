@@ -9,6 +9,7 @@ import { VoiceLoop } from "../voice.js";
 import { enter } from "../ui/motion.js";
 import { commands } from "../commands.js";
 import { runQaSession, qaActive } from "../qa.js";
+import { t } from "../i18n.js";
 
 const GESTURE_ACTION = {
   swipe_right: "next", thumbs_up: "next", swipe_left: "back",
@@ -36,7 +37,7 @@ export async function mount(root) {
   const canvas = document.createElement("canvas"); canvas.style.display = "none"; canvas.width = 320; canvas.height = 240;
   wrap.append(step, meta, video, canvas);
 
-  let hud = Hud({ status: "tracking", active: null });
+  let hud = Hud({ status: t("hud.tracking"), active: null });
   const qaOverlay = QaOverlay();
   root.append(wrap, hud, qaOverlay.el);
   enter(wrap);
@@ -50,7 +51,7 @@ export async function mount(root) {
     tts.stopAll();                       // stop the previous step's narration first
     const i = state.step_index = Math.min(state.step_index, steps.length - 1);
     step.textContent = stepTextOf(i);
-    meta.textContent = `step ${i + 1} of ${steps.length}  ·  kitchen mode`;
+    meta.textContent = t("amb.meta", { i: i + 1, n: steps.length });
     if (speak) tts.enqueue(stepTextOf(i));
   }
 

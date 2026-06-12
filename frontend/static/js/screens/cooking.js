@@ -18,6 +18,7 @@ import { commands } from "../commands.js";
 import { runQaSession, qaActive } from "../qa.js";
 import { saveMoment, captureFrame } from "../moments.js";
 import { buildSchedule } from "../scheduler.js";
+import { t } from "../i18n.js";
 
 const GESTURE_ACTION = {
   thumbs_up: "next", swipe_right: "next", swipe_left: "back",
@@ -65,22 +66,22 @@ export async function mount(root) {
   const cta = document.createElement("div");
   cta.className = "cooking-cta";
   cta.append(
-    Button({ label: "Read aloud", intent: "ghost", onClick: () => commands.dispatch("read", "button") }),
-    Button({ label: "Previous",   intent: "ghost", onClick: () => commands.dispatch("back", "button") }),
-    Button({ label: "Next step",  trailingIcon: "arrowRight", onClick: () => commands.dispatch("next", "button") }),
+    Button({ label: t("rec.read"), intent: "ghost", onClick: () => commands.dispatch("read", "button") }),
+    Button({ label: t("cook.prev"),   intent: "ghost", onClick: () => commands.dispatch("back", "button") }),
+    Button({ label: t("cook.next"),  trailingIcon: "arrowRight", onClick: () => commands.dispatch("next", "button") }),
   );
 
   const videoEl  = document.createElement("video"); videoEl.playsInline = true; videoEl.muted = true;
   const canvasEl = document.createElement("canvas"); canvasEl.width = 320; canvasEl.height = 240;
-  const pip = PipFrame({ video: videoEl, canvas: canvasEl, status: "tracking", confidence: 0 });
+  const pip = PipFrame({ video: videoEl, canvas: canvasEl, status: t("hud.tracking"), confidence: 0 });
 
-  let currentHud = Hud({ status: "tracking", active: null });
+  let currentHud = Hud({ status: t("hud.tracking"), active: null });
 
   const navControls = document.createElement("div");
   navControls.style.cssText = "display:flex; align-items:center; gap: var(--space-4);";
   navControls.append(
-    Toggle({ label: "Voice Q&A ✌", checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
-    Button({ label: "Back to recipes", intent: "ghost", onClick: () => commands.dispatch("exit", "button") }),
+    Toggle({ label: t("common.voiceQA"), checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
+    Button({ label: t("cook.backToRecipes"), intent: "ghost", onClick: () => commands.dispatch("exit", "button") }),
   );
   const header = ScreenHeader(eyebrow, navControls);
 
@@ -104,7 +105,7 @@ export async function mount(root) {
       ? `${Math.floor(stepTimer.remaining / 60)}:${String(stepTimer.remaining % 60).padStart(2, "0")}`
       : null;
     const newHud = Hud({
-      status: state.idle ? "paused" : "tracking",
+      status: state.idle ? t("hud.paused") : t("hud.tracking"),
       active, timer: timerStr, locked: state.locked_step,
     });
     currentHud.replaceWith(newHud);
@@ -120,7 +121,7 @@ export async function mount(root) {
       p.classList.toggle("done", idx < i);
       p.classList.toggle("current", idx === i);
     });
-    stepEyebrow.textContent = `step ${String(i + 1).padStart(2, "0")} of ${String(steps.length).padStart(2, "0")}`;
+    stepEyebrow.textContent = t("cook.step", { i: String(i + 1).padStart(2, "0"), n: String(steps.length).padStart(2, "0") });
     stepText.textContent = stepTextOf(i);
 
     if (stepTimer) { stepTimer.stop(); stepTimer = null; }
@@ -130,7 +131,7 @@ export async function mount(root) {
       stepTimer = new Timer({
         seconds,
         onTick: () => refreshHud(),
-        onDone: () => { stepTimer = null; refreshHud(); tts.enqueue(`Timer done for step ${i + 1}.`); },
+        onDone: () => { stepTimer = null; refreshHud(); tts.enqueue(t("cook.ttsTimerDone", { n: i + 1 })); },
       });
       stepTimer.start();
     }
@@ -148,7 +149,7 @@ export async function mount(root) {
     const id = await saveMoment(state.session_id, state.step_index, blob);
     state._momentsCount = (state._momentsCount || 0) + 1;
     try { await api.session.event(state.session_id, "moment_saved", { step_num: state.step_index, indexeddb_key: id, ts: Date.now() }); } catch {}
-    tts.enqueue(`Saved at step ${state.step_index + 1}.`);
+    tts.enqueue(t("cook.ttsSaved", { n: state.step_index + 1 }));
   }
 
   // ── the single action handler (every input lands here) ────────────
@@ -167,7 +168,7 @@ export async function mount(root) {
       case "back":    state.prevStep(); renderStep(); break;
       case "read":    tts.stopAll(); tts.enqueue(stepText.textContent); break;
       case "lock":    state.setLocked(!state.locked_step); refreshHud();
-                      tts.enqueue(state.locked_step ? "Locked." : "Released."); break;
+                      tts.enqueue(state.locked_step ? t("cook.ttsLocked") : t("cook.ttsReleased")); break;
       case "exit":    tts.stopAll(); state.go("recipes"); break;
       case "pause":   tts.stopAll(); stepTimer?.pause(); state.setIdle(true); refreshHud(); break;
       case "resume":  stepTimer?.resume(); state.setIdle(false); refreshHud(); break;
@@ -226,7 +227,7 @@ async function mountParallel(root) {
   const schedule = buildSchedule(A, B);
   let cursor = state._parCursor = state._parCursor || 0;
 
-  const eyebrow = Eyebrow({ text: `parallel · ${A.name} + ${B.name}` });
+  const eyebrow = Eyebrow({ text: t("cook.parallel", { a: A.name, b: B.name }) });
   const stage = document.createElement("div"); stage.className = "parallel-stage";
   const laneA = document.createElement("div"); laneA.className = "parallel-lane";
   laneA.innerHTML = `<h3>${A.name}</h3><div class="step"></div>`;
@@ -234,10 +235,10 @@ async function mountParallel(root) {
   laneB.innerHTML = `<h3>${B.name}</h3><div class="step"></div>`;
   stage.append(laneA, laneB);
 
-  const hud = Hud({ status: "tracking", active: null });
+  const hud = Hud({ status: t("hud.tracking"), active: null });
   const header = ScreenHeader(
     eyebrow,
-    Button({ label: "Back to recipes", intent: "ghost", onClick: () => commands.dispatch("exit", "button") }),
+    Button({ label: t("cook.backToRecipes"), intent: "ghost", onClick: () => commands.dispatch("exit", "button") }),
   );
   const wrap = document.createElement("div"); wrap.className = "cooking-wrap";
   wrap.append(header, stage);
@@ -253,8 +254,8 @@ async function mountParallel(root) {
       for (let i = cursor; i >= 0; i--) if (schedule[i].recipe === recipe) return schedule[i];
       return null;
     };
-    laneA.querySelector(".step").textContent = lastInLane("A")?.text || "ready";
-    laneB.querySelector(".step").textContent = lastInLane("B")?.text || "ready";
+    laneA.querySelector(".step").textContent = lastInLane("A")?.text || t("cook.ready");
+    laneB.querySelector(".step").textContent = lastInLane("B")?.text || t("cook.ready");
     if (cur) tts.enqueue(`${cur.recipe === "A" ? A.name : B.name}: ${cur.text}`);
   }
 

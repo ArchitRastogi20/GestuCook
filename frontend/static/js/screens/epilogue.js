@@ -5,6 +5,7 @@ import { api } from "../api.js";
 import { tts } from "../audio.js";
 import { enter } from "../ui/motion.js";
 import { loadMoments } from "../moments.js";
+import { t } from "../i18n.js";
 
 // Placeholder layout shown while the session summary + moments load.
 function buildSkeleton() {
@@ -30,7 +31,7 @@ export async function mount(root) {
   const r = state.recipes[state.recipe_index];
   const startedAt = state._epStartedAt || (state._epStartedAt = Date.now() - 60000);
   const durationMin = Math.max(1, Math.round((Date.now() - startedAt) / 60000));
-  const recipeTitle = r?.name || "your dish";
+  const recipeTitle = r?.name || t("ep.fallbackDish");
   const ingredientsCount = (r?.ingredients || []).length;
   const costCents = Math.round((state.cost.usd || 0) * 100);
 
@@ -54,16 +55,19 @@ export async function mount(root) {
     monthCount = h?.totals?.month_count || 1;
   }
 
-  const eyebrow = Eyebrow({ text: "well done" });
+  const eyebrow = Eyebrow({ text: t("ep.eyebrow") });
   eyebrow.classList.add("epilogue-eyebrow");
 
   const h1 = document.createElement("h1");
   h1.className = "epilogue-h1";
-  h1.innerHTML = `You cooked <span class="italic">${recipeTitle}</span>.`;
+  h1.innerHTML = t("ep.heading", { title: recipeTitle });
 
   const stat = document.createElement("p");
   stat.className = "epilogue-stat";
-  stat.innerHTML = `<b>${durationMin} min</b> · <b>${ingredientsCount}</b> ingredients · <b>${costCents.toFixed(1)}¢</b> in API · <b>${monthCount}</b> recipe${monthCount === 1 ? "" : "s"} this month`;
+  stat.innerHTML = t("ep.stat", {
+    min: durationMin, ing: ingredientsCount, c: costCents.toFixed(1), m: monthCount,
+    recipes: t(monthCount === 1 ? "ep.recipeOne" : "ep.recipeMany"),
+  });
 
   const sheet = document.createElement("div");
   sheet.className = "epilogue-sheet";
@@ -71,14 +75,14 @@ export async function mount(root) {
   for (const e of m) {
     const cell = document.createElement("div"); cell.className = "frame";
     const img = document.createElement("img"); img.src = URL.createObjectURL(e.blob);
-    const cap = document.createElement("div"); cap.className = "caption"; cap.textContent = `step ${e.step_num}`;
+    const cap = document.createElement("div"); cap.className = "caption"; cap.textContent = t("ep.caption", { n: e.step_num });
     cell.append(img, cap); sheet.append(cell);
   }
 
   const cta = document.createElement("div");
   cta.style.cssText = "display:flex; gap: var(--space-3); justify-content:center; margin-top: var(--space-6);";
   cta.append(
-    Button({ label: "Cook another", trailingIcon: "arrowRight", onClick: () => { state.resetCost(); state.go("mode"); } }),
+    Button({ label: t("ep.cookAnother"), trailingIcon: "arrowRight", onClick: () => { state.resetCost(); state.go("mode"); } }),
   );
 
   const wrap = document.createElement("div");
@@ -87,7 +91,10 @@ export async function mount(root) {
   root.replaceChildren(wrap);
   enter(wrap);
 
-  tts.enqueue(`You cooked ${recipeTitle} in about ${durationMin} minutes. Used ${ingredientsCount} ingredients. Total cost ${costCents.toFixed(0)} cents. You've cooked ${monthCount} recipe${monthCount === 1 ? "" : "s"} this month.`);
+  tts.enqueue(t("ep.tts", {
+    title: recipeTitle, min: durationMin, ing: ingredientsCount, c: costCents.toFixed(0), m: monthCount,
+    recipes: t(monthCount === 1 ? "ep.recipeOne" : "ep.recipeMany"),
+  }));
 }
 
 export function unmount() { tts.stopAll(); }

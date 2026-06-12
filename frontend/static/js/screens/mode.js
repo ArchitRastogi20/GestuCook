@@ -3,30 +3,31 @@ import { Bezel, Eyebrow } from "../ui/components.js";
 import { state } from "../state.js";
 import { enter } from "../ui/motion.js";
 import { svg, ICONS } from "../ui/icons.js";
+import { t } from "../i18n.js";
 
 export function mount(root) {
   root.innerHTML = "";
 
-  const eyebrow = Eyebrow({ text: "step 1 of 3 · pick a mode" });
+  const eyebrow = Eyebrow({ text: t("mode.eyebrow") });
 
   const h2 = document.createElement("h2");
   h2.className = "t-display-l";
   h2.style.textAlign = "center";
   h2.style.marginBottom = "var(--space-3)";
-  h2.innerHTML = `How would you like to <span class="italic">begin</span>?`;
+  h2.innerHTML = t("mode.heading");
 
   const sub = document.createElement("p");
   sub.className = "t-body";
   sub.style.textAlign = "center";
   sub.style.margin = "0 auto var(--space-6)";
-  sub.textContent = "Photograph your ingredients, or just say them aloud.";
+  sub.textContent = t("mode.sub");
 
   const grid = document.createElement("div");
   grid.className = "mode-grid";
 
   grid.append(
-    makeCard({ icon: ICONS.camera, title: "Photo", desc: "Upload images of fruits, vegetables, or any food on the counter.", goto: "photo" }),
-    makeCard({ icon: ICONS.mic,    title: "Hands-free", desc: "Press the mic and say what you have, like talking to a friend.", goto: "handsfree" }),
+    makeCard({ icon: ICONS.camera, title: t("mode.photo.title"), desc: t("mode.photo.desc"), goto: "photo" }),
+    makeCard({ icon: ICONS.mic,    title: t("mode.handsfree.title"), desc: t("mode.handsfree.desc"), goto: "handsfree" }),
   );
 
   const wrap = document.createElement("div");

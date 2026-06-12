@@ -4,21 +4,22 @@ import { state } from "../state.js";
 import { api } from "../api.js";
 import { enter } from "../ui/motion.js";
 import { svg, ICONS } from "../ui/icons.js";
+import { t } from "../i18n.js";
 
 export function mount(root) {
   root.innerHTML = "";
 
-  const eyebrow = Eyebrow({ text: "step 2 · tell us what you have" });
+  const eyebrow = Eyebrow({ text: t("hf.eyebrow") });
 
   const h2 = document.createElement("h2");
   h2.className = "t-display-l";
   h2.style.cssText = "text-align:center; margin-bottom: var(--space-3);";
-  h2.innerHTML = `Say it <span class="italic">aloud</span>.`;
+  h2.innerHTML = t("hf.heading");
 
   const sub = document.createElement("p");
   sub.className = "t-body";
   sub.style.cssText = "text-align:center; margin: 0 auto var(--space-6);";
-  sub.textContent = "Press the mic, list your ingredients, release. We'll transcribe.";
+  sub.textContent = t("hf.sub");
 
   const mic = document.createElement("button");
   mic.className = "mic-btn";
@@ -26,35 +27,51 @@ export function mount(root) {
 
   const transcript = document.createElement("div");
   transcript.className = "voice-transcript";
-  transcript.textContent = "Press the mic to start speaking.";
+  transcript.textContent = t("hf.idle");
 
   const ingredientsList = document.createElement("div");
   ingredientsList.className = "ingredients-list";
 
   let detected = [];
 
+  const chipGroup = document.createElement("div");
+  chipGroup.className = "chip-group";
+  let selectedCuisine = null;
+  // Labels localize; the value sent to the backend stays the English name.
+  for (const c of ["Italian", "Indian", "Chinese", "American", "Turkish", "Any"]) {
+    const chip = Chip({ label: t(`cuisine.${c}`) });
+    chip.dataset.cuisine = c;
+    chip.style.cursor = "pointer";
+    chip.addEventListener("click", () => {
+      for (const k of chipGroup.querySelectorAll(".chip")) k.classList.remove("on");
+      chip.classList.add("on");
+      selectedCuisine = c === "Any" ? null : c;
+    });
+    chipGroup.append(chip);
+  }
+
   const reqStatus = RequestStatus();
 
   const goBtn = Button({
-    label: "Generate recipes",
+    label: t("hf.generate"),
     trailingIcon: "arrowRight",
     onClick: async () => {
       if (!detected.length || goBtn.disabled) return;
-      setLoading(goBtn, true, "Generating…");
-      reqStatus.send("Recipe request sent", "Generating your recipes — this can take a few seconds.");
+      setLoading(goBtn, true, t("photo.generating"));
+      reqStatus.send(t("hf.sentTitle"), t("hf.sentSub"));
       try {
-        const recipes = await api.generateRecipes(detected, null);
+        const recipes = await api.generateRecipes(detected, selectedCuisine, state.language);
         state.setRecipes(recipes.recipes || recipes);
         state.go("recipes");
       } catch (e) {
         setLoading(goBtn, false);
-        reqStatus.fail("Request failed", "Couldn't reach the kitchen. Check the backend is running, then try again.");
+        reqStatus.fail(t("photo.failedTitle"), t("hf.failedSub"));
       }
     },
   });
   goBtn.disabled = true;
 
-  const back = Button({ label: "Back", intent: "ghost", onClick: () => state.go("mode") });
+  const back = Button({ label: t("common.back"), intent: "ghost", onClick: () => state.go("mode") });
 
   const actions = document.createElement("div");
   actions.style.cssText = "display:flex; gap: var(--space-3); justify-content:center; margin-top: var(--space-5);";
@@ -73,10 +90,10 @@ export function mount(root) {
       rec.onstop = async () => {
         const blob = new Blob(chunks, { type: "audio/webm" });
         stream.getTracks().forEach(t => t.stop());
-        const res = await api.transcribe(blob);
-        transcript.textContent = res.text || "(nothing heard)";
-        // naive ingredient extraction: split on commas and `and`
-        detected = (res.text || "").split(/,| and /).map(s => s.trim()).filter(Boolean);
+        const res = await api.transcribe(blob, "ingredients", state.language);
+        transcript.textContent = res.text || t("hf.nothing");
+        // naive ingredient extraction: split on commas and the localized "and"
+        detected = (res.text || "").split(/,| and | और | e | y /).map(s => s.trim()).filter(Boolean);
         ingredientsList.innerHTML = "";
         for (const d of detected) ingredientsList.append(Chip({ label: d, variant: "sage" }));
         goBtn.disabled = detected.length === 0;
@@ -91,7 +108,7 @@ export function mount(root) {
   voiceWrap.append(mic, transcript, ingredientsList);
 
   const wrap = document.createElement("div");
-  wrap.append(eyebrow, h2, sub, Bezel({ children: [voiceWrap] }), actions, reqStatus.el);
+  wrap.append(eyebrow, h2, sub, Bezel({ children: [voiceWrap] }), chipGroup, actions, reqStatus.el);
   root.append(wrap);
   enter(wrap);
 }

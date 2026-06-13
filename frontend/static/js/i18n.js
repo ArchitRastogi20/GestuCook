@@ -87,6 +87,7 @@ const STRINGS = {
     "amb.meta": "step {i} of {n}  ·  kitchen mode",
 
     "tr.eyebrow": "gesture trainer",
+    "tr.lede": "Five gestures run the whole kitchen. Try each one — the bar fills as the camera recognises it.",
     "tr.skip": "Skip",
     "tr.exit": "Exit",
     "tr.thumbs.label": "thumbs up",   "tr.thumbs.prompt": "Show me a thumbs up.",
@@ -212,6 +213,7 @@ const STRINGS = {
     "amb.meta": "स्टेप {i} / {n}  ·  किचन मोड",
 
     "tr.eyebrow": "इशारों की ट्रेनिंग",
+    "tr.lede": "पाँच इशारों से पूरी रसोई चलती है। हर एक आज़माइए — कैमरा पहचानते ही पट्टी भरती जाएगी।",
     "tr.skip": "छोड़ें",
     "tr.exit": "बाहर निकलें",
     "tr.thumbs.label": "थम्स अप",     "tr.thumbs.prompt": "मुझे थम्स अप दिखाइए।",
@@ -337,6 +339,7 @@ const STRINGS = {
     "amb.meta": "passo {i} di {n}  ·  modalità cucina",
 
     "tr.eyebrow": "allenatore di gesti",
+    "tr.lede": "Cinque gesti controllano tutta la cucina. Provali uno per uno — la barra si riempie quando la camera ti riconosce.",
     "tr.skip": "Salta",
     "tr.exit": "Esci",
     "tr.thumbs.label": "pollice in su",  "tr.thumbs.prompt": "Mostrami un pollice in su.",
@@ -462,6 +465,7 @@ const STRINGS = {
     "amb.meta": "paso {i} de {n}  ·  modo cocina",
 
     "tr.eyebrow": "entrenador de gestos",
+    "tr.lede": "Cinco gestos controlan toda la cocina. Pruébalos uno por uno — la barra se llena cuando la cámara te reconoce.",
     "tr.skip": "Omitir",
     "tr.exit": "Salir",
     "tr.thumbs.label": "pulgar arriba",  "tr.thumbs.prompt": "Muéstrame un pulgar arriba.",

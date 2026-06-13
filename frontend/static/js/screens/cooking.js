@@ -61,7 +61,17 @@ export async function mount(root) {
   const stepText = document.createElement("div");
   stepText.className = "cooking-step-text";
 
-  const card = Bezel({ children: [stepEyebrow, document.createElement("div"), stepText] });
+  // inline depleting timer: 2px track + accent fill + mono readout
+  const timerRow = document.createElement("div");
+  timerRow.className = "step-timer";
+  const timerTrack = document.createElement("div"); timerTrack.className = "track";
+  const timerFill  = document.createElement("div"); timerFill.className = "fill";
+  const timerTime  = document.createElement("span"); timerTime.className = "time";
+  timerTrack.append(timerFill);
+  timerRow.append(timerTrack, timerTime);
+  const fmtTime = (s) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+  const card = Bezel({ children: [stepEyebrow, document.createElement("div"), stepText, timerRow] });
 
   const cta = document.createElement("div");
   cta.className = "cooking-cta";
@@ -128,12 +138,21 @@ export async function mount(root) {
     const s = steps[i];
     const seconds = (typeof s === "object" && s?.duration_seconds) || null;
     if (seconds) {
+      timerFill.style.width = "100%";
+      timerTime.textContent = fmtTime(seconds);
+      timerRow.classList.add("on");
       stepTimer = new Timer({
         seconds,
-        onTick: () => refreshHud(),
-        onDone: () => { stepTimer = null; refreshHud(); tts.enqueue(t("cook.ttsTimerDone", { n: i + 1 })); },
+        onTick: (remaining) => {
+          timerFill.style.width = `${(remaining / seconds) * 100}%`;
+          timerTime.textContent = fmtTime(remaining);
+          refreshHud();
+        },
+        onDone: () => { stepTimer = null; timerRow.classList.remove("on"); refreshHud(); tts.enqueue(t("cook.ttsTimerDone", { n: i + 1 })); },
       });
       stepTimer.start();
+    } else {
+      timerRow.classList.remove("on");
     }
     refreshHud();
   }

@@ -29,18 +29,23 @@ export async function mount(root) {
   wrap.className = "trainer-wrap";
 
   const eyebrow = Eyebrow({ text: t("tr.eyebrow") });
+  const lede = document.createElement("p");
+  lede.className = "trainer-lede t-body";
+  lede.textContent = t("tr.lede");
   const h1 = document.createElement("h2");
   const p  = document.createElement("p");
   const bar = document.createElement("div"); bar.className = "trainer-conf";
   const fill = document.createElement("div"); bar.append(fill);
+  const dots = document.createElement("div"); dots.className = "trainer-dots";
+  STEPS.forEach(() => dots.append(document.createElement("i")));
   const cta = document.createElement("div");
-  cta.style.cssText = "margin-top: var(--space-5); display:flex; gap: var(--space-3);";
+  cta.style.cssText = "margin-top: var(--space-5); display:flex; gap: var(--space-4);";
   cta.append(
     Button({ label: t("tr.skip"), intent: "ghost", onClick: () => finish(false) }),
     Button({ label: t("tr.exit"), intent: "ghost", onClick: () => finish(false) }),
   );
   const promptCol = document.createElement("div"); promptCol.className = "trainer-prompt";
-  promptCol.append(h1, p, bar, cta);
+  promptCol.append(h1, p, bar, dots, cta);
 
   const pipBox = document.createElement("div"); pipBox.className = "trainer-pip";
   const video  = document.createElement("video"); video.playsInline = true; video.muted = true;
@@ -50,7 +55,7 @@ export async function mount(root) {
 
   const stage = document.createElement("div"); stage.className = "trainer-stage";
   stage.append(promptCol, pipBezel);
-  wrap.append(eyebrow, stage);
+  wrap.append(eyebrow, lede, stage);
   root.append(wrap);
   enter(wrap);
 
@@ -64,6 +69,10 @@ export async function mount(root) {
     h1.textContent = STEPS[i].label;
     p.textContent  = STEPS[i].prompt;
     fill.style.width = "0%";
+    [...dots.children].forEach((d, k) => {
+      d.classList.toggle("done", k < i);
+      d.classList.toggle("current", k === i);
+    });
     tts.enqueue(STEPS[i].prompt);
   }
 
@@ -88,11 +97,15 @@ export async function mount(root) {
     done = true;
     GestureEngine.setFrameObserver(null);
     GestureEngine.stop();
+    // any exit counts as onboarding seen — never nag a returning user
+    try { localStorage.setItem("gestucook.trainerDone", "1"); } catch {}
     if (completed && state.user?.name) {
       try { await api.session.trainerCompleted(state.user.name); } catch {}
       tts.enqueue(t("tr.ttsDone"));
     }
-    state.go("recipes");
+    // onboarding (no recipes yet) lands in mode-pick; practice from the
+    // recipes screen returns to recipes
+    state.go(state.recipes.length ? "recipes" : "mode");
   }
 }
 

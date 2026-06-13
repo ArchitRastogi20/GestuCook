@@ -73,16 +73,18 @@ export function mount(root) {
   async function onStart() {
     const name = input.value.trim();
     if (!name) { input.focus(); return; }
+    // first-run onboarding: new users practice the five gestures before cooking
+    const next = localStorage.getItem("gestucook.trainerDone") ? "mode" : "trainer";
     try {
       const { session_id, user } = await api.session.start(name);
       state.setUser(user);
       state.setSession(session_id);
-      state.go("mode");
+      state.go(next);
     } catch (e) {
       console.error(e);
       // graceful: still proceed so the demo works without Mongo
       state.setUser({ name });
-      state.go("mode");
+      state.go(next);
     }
   }
 }

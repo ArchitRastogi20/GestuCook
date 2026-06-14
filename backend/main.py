@@ -40,6 +40,9 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.4-nano")
 OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "google/gemma-4-31b-it:free")
+GROK_API_KEY = os.getenv("GROK_API_KEY", "")
+GROK_MODEL = os.getenv("GROK_MODEL", "xgrok-alpha-1")
+GROK_URL = os.getenv("GROK_URL", "https://api.x.ai/v1/responses")
 ASR_URL = os.getenv("ASR_URL", "http://asr-service:8001")
 TTS_URL = os.getenv("TTS_URL", "http://tts-service:8002")
 
@@ -116,18 +119,27 @@ async def on_startup():
                 f" ({OPENAI_TRANSCRIBE_MODEL} / {OPENAI_TTS_MODEL} voice={OPENAI_TTS_VOICE})"
                 if AUDIO_PROVIDER == "openai" else "")
     logger.info("LLM_PROVIDER = %s", LLM_PROVIDER)
-    if LLM_PROVIDER == "openai":
+    p = LLM_PROVIDER.lower()
+    if p == "openai":
         logger.info("OPENAI_MODEL  = %s", OPENAI_MODEL)
         preview = OPENAI_API_KEY[:12] + "..." if len(OPENAI_API_KEY) > 12 else "(EMPTY)"
         logger.info("OPENAI_API_KEY = %s", preview)
         if not OPENAI_API_KEY:
             logger.error("OPENAI_API_KEY is EMPTY. All LLM calls will fail!")
-    else:
+    elif p == "openrouter":
         logger.info("OPENROUTER_MODEL = %s", OPENROUTER_MODEL)
         preview = OPENROUTER_API_KEY[:12] + "..." if len(OPENROUTER_API_KEY) > 12 else "(EMPTY)"
         logger.info("OPENROUTER_API_KEY = %s", preview)
         if not OPENROUTER_API_KEY:
             logger.error("OPENROUTER_API_KEY is EMPTY. All LLM calls will fail!")
+    elif p == "grok":
+        logger.info("GROK_MODEL = %s", GROK_MODEL)
+        preview = GROK_API_KEY[:12] + "..." if len(GROK_API_KEY) > 12 else "(EMPTY)"
+        logger.info("GROK_API_KEY = %s", preview)
+        if not GROK_API_KEY:
+            logger.error("GROK_API_KEY is EMPTY. All LLM calls will fail!")
+    else:
+        logger.warning("Unknown LLM_PROVIDER '%s' - defaulting to openrouter behaviour", LLM_PROVIDER)
     logger.info("ASR_URL = %s", ASR_URL)
     logger.info("TTS_URL = %s", TTS_URL)
     logger.info("=================================")
@@ -288,15 +300,119 @@ async def call_openrouter(messages: list, max_tokens: int = 1024) -> dict:
         )
 
     data = resp.json()
-    logger.info("OpenRouter OK, usage=%s", data.get("usage", {}))
-    text = data["choices"][0]["message"]["content"]
+    logger.info("OpenRouter OK, response keys=%s", list(data.keys()))
     usage = data.get("usage", {})
+    text = None
+
+    # Try OpenAI/OpenRouter style: choices[0].message.content
+    chs = data.get("choices")
+    if isinstance(chs, list) and chs:
+        ch = chs[0]
+        if isinstance(ch, dict) and ch.get("message"):
+            text = ch["message"].get("content")
+        else:
+            text = ch.get("text") or ch.get("content")
+
+    # Try x.ai style output if needed
+    if text is None:
+        out = data.get("output") or data.get("outputs")
+        if isinstance(out, list) and out:
+            c0 = out[0].get("content") if isinstance(out[0], dict) else None
+            if isinstance(c0, list) and c0:
+                for item in c0:
+                    if isinstance(item, dict) and item.get("text"):
+                        text = item.get("text")
+                        break
+
+    if text is None:
+        text = data.get("text") or json.dumps(data)
+
+    return {"text": text, "usage": usage}
+
+
+async def call_grok(messages: list, max_tokens: int = 1024) -> dict:
+    """Call Grok-like API (Anthropic-style interface assumed)."""
+    logger.info("Calling Grok: model=%s max_tokens=%d", GROK_MODEL, max_tokens)
+    try:
+        # Convert our 'messages' (openai-like list of {role, content}) to
+        # the x.ai 'input' shape: an array of {role, content} objects. If the
+        # caller already provided the right shape, it's safe to send as-is.
+        # x.ai /responses expects max_output_tokens instead of max_tokens
+        payload = {
+            "model": GROK_MODEL,
+            "input": messages,
+            "max_output_tokens": max_tokens,
+            "temperature": 0.7,
+        }
+        async with httpx.AsyncClient(timeout=90) as client:
+            resp = await client.post(
+                GROK_URL,
+                headers={
+                    "Authorization": f"Bearer {GROK_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+            )
+    except httpx.TimeoutException:
+        logger.error("Grok request timed out after 90s")
+        raise HTTPException(status_code=504, detail="Grok request timed out")
+    except Exception as e:
+        logger.error("Grok connection error: %s", str(e))
+        raise HTTPException(status_code=502, detail=f"Grok connection error: {str(e)}")
+
+    if resp.status_code != 200:
+        body = resp.text[:500]
+        logger.error("Grok returned HTTP %d: %s", resp.status_code, body)
+        raise HTTPException(
+            status_code=502,
+            detail=f"Grok API error ({resp.status_code}): {body}",
+        )
+
+    data = resp.json()
+    logger.info("Grok OK, response keys=%s", list(data.keys()))
+    text = None
+    usage = data.get("usage", {})
+
+    # Try x.ai style: output -> [ { content: [ { type, text } ] } ]
+    try:
+        out = data.get("output") or data.get("outputs")
+        if isinstance(out, list) and out:
+            c0 = out[0].get("content") if isinstance(out[0], dict) else None
+            if isinstance(c0, list) and c0:
+                # look for first element with a 'text' field
+                for item in c0:
+                    if isinstance(item, dict) and item.get("text"):
+                        text = item.get("text")
+                        break
+    except Exception:
+        pass
+
+    # fallback: try choices[0].message.content (openai/openrouter style)
+    if text is None:
+        chs = data.get("choices")
+        if isinstance(chs, list) and chs:
+            ch = chs[0]
+            if isinstance(ch, dict) and ch.get("message"):
+                text = ch["message"].get("content")
+            else:
+                text = ch.get("text") or ch.get("content")
+
+    if text is None:
+        # final fallback to top-level text or dump
+        text = data.get("text") or json.dumps(data)
+
     return {"text": text, "usage": usage}
 
 
 async def call_llm(messages: list, max_tokens: int = 1024) -> dict:
-    if LLM_PROVIDER == "openai":
+    p = LLM_PROVIDER.lower()
+    if p == "openai":
         return await call_openai(messages, max_tokens)
+    if p == "openrouter":
+        return await call_openrouter(messages, max_tokens)
+    if p == "grok":
+        return await call_grok(messages, max_tokens)
+    # default to openrouter
     return await call_openrouter(messages, max_tokens)
 
 

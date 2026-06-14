@@ -299,3 +299,60 @@ export function QaOverlay() {
   };
   return ctl;
 }
+
+// Snackbar — temporary notification bar with optional confirm/cancel actions.
+export function Snackbar() {
+  const msgEl   = el("span", { cls: "snackbar-msg" });
+  const actions = el("div",  { cls: "snackbar-actions" });
+  const root    = el("div",  { cls: "snackbar" }, [msgEl, actions]);
+  document.body.appendChild(root);
+
+  let _timer = null;
+
+  function clearTimer() {
+    if (_timer) { clearTimeout(_timer); _timer = null; }
+  }
+
+  const snackbar = {
+    el: root,
+
+    show(message, opts = {}) {
+      const { timeout = 4000, confirmText, onConfirm, cancelText, onCancel } = opts;
+      clearTimer();
+
+      msgEl.textContent = message;
+      actions.innerHTML = "";
+
+      if (cancelText) {
+        const btn = el("button", { cls: "snackbar-btn snackbar-btn--ghost", text: cancelText });
+        btn.addEventListener("click", () => {
+          snackbar.hide();
+          onCancel && onCancel();
+        });
+        actions.appendChild(btn);
+      }
+
+      if (confirmText) {
+        const btn = el("button", { cls: "snackbar-btn", text: confirmText });
+        btn.addEventListener("click", () => {
+          snackbar.hide();
+          onConfirm && onConfirm();
+        });
+        actions.appendChild(btn);
+      }
+
+      root.classList.add("snackbar--visible");
+
+      if (timeout > 0) {
+        _timer = setTimeout(() => snackbar.hide(), timeout);
+      }
+    },
+
+    hide() {
+      clearTimer();
+      root.classList.remove("snackbar--visible");
+    },
+  };
+
+  return snackbar;
+}

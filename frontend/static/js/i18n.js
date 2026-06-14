@@ -72,6 +72,7 @@ const STRINGS = {
     "rec.cardNum": "recipe {nn}",
     "rec.ttsSelectedFirst": "Selected {name}. Swipe to pick a second, or thumbs up to cook just this one.",
     "rec.ttsSelectedSecond": "Selected {name}. Thumbs up to cook both together.",
+    "rec.toastExit": "Exit recipe view?",
 
     "cook.prev": "Previous",
     "cook.next": "Next step",
@@ -123,6 +124,8 @@ const STRINGS = {
     "common.voiceQA": "Voice Q&A ✌",
     "common.requestSent": "Request sent",
     "common.wrong": "Something went wrong",
+    "common.confirm": "Confirm",
+    "common.cancel": "Cancel",
 
     "qa.listening": "listening",
     "qa.askTitle": "Ask your question",

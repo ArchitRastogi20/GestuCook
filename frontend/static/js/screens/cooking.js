@@ -7,7 +7,7 @@
 //
 // Every input -- gesture, voice, button -- routes through commands.dispatch(),
 // so one intent produces exactly one action.
-import { Bezel, Eyebrow, Button, PipFrame, Hud, ScreenHeader, Toggle, QaOverlay, highlightHudGesture } from "../ui/components.js";
+import { Bezel, Eyebrow, Button, PipFrame, Hud, ScreenHeader, Toggle, QaOverlay, highlightHudGesture, Snackbar } from "../ui/components.js";
 import { state } from "../state.js";
 import { api } from "../api.js";
 import { tts, Timer } from "../audio.js";
@@ -37,6 +37,9 @@ let unbindTTS = null;
 
 export async function mount(root) {
   if (state.mode === "parallel-2") return mountParallel(root);
+
+  let recipesSnackbar = null;
+  let snackbarOpen = false;
 
   root.innerHTML = "";
   const r = state.recipes[state.recipe_index];
@@ -103,6 +106,9 @@ export async function mount(root) {
   wrap.append(header, progress, card, cta, pip);
   root.append(wrap, currentHud, qaOverlay.el);
   enter(wrap);
+
+  recipesSnackbar = Snackbar();
+  document.body.appendChild(recipesSnackbar.el);
 
   // ── per-step render (no camera/mic churn) ─────────────────────────
   function stepTextOf(i) {
@@ -188,7 +194,18 @@ export async function mount(root) {
       case "read":    tts.stopAll(); tts.enqueue(stepText.textContent); break;
       case "lock":    state.setLocked(!state.locked_step); refreshHud();
                       tts.enqueue(state.locked_step ? t("cook.ttsLocked") : t("cook.ttsReleased")); break;
-      case "exit":    tts.stopAll(); state.go("recipes"); break;
+
+      case "exit":
+        if (snackbarOpen) return; 
+        snackbarOpen = true;
+        recipesSnackbar.show('Exit cooking?', {
+          timeout: 0,
+          confirmText: 'Confirm',
+          onConfirm: () => { snackbarOpen = false; tts.stopAll(); state.go("recipes"); },
+          cancelText: 'Cancel',
+          onCancel: () => { snackbarOpen = false; recipesSnackbar.hide(); },
+        });
+        break;
       case "pause":   tts.stopAll(); stepTimer?.pause(); state.setIdle(true); refreshHud(); break;
       case "resume":  stepTimer?.resume(); state.setIdle(false); refreshHud(); break;
       case "ambient": state.go("ambient"); break;
@@ -207,6 +224,7 @@ export async function mount(root) {
   // ── gesture input ─────────────────────────────────────────────────
   function onGesture(g) {
     if (qaActive()) return;          // no navigation while a question is in flight
+    if (snackbarOpen) return;        // no navigation while a snackbar is open
     highlightHudGesture(currentHud, g);
     if (g === "idle") {
       state.setIdle(true); tts.stopAll(); stepTimer?.pause(); refreshHud();
@@ -312,4 +330,8 @@ export function unmount() {
   tts.stopAll();
   if (stepTimer) { stepTimer.stop(); stepTimer = null; }
   if (voice) { voice.stop(); voice = null; }
+  try {
+    if (recipesSnackbar && recipesSnackbar.el && recipesSnackbar.el.parentNode)
+      recipesSnackbar.el.parentNode.removeChild(recipesSnackbar.el);
+  } catch (e) {}
 }

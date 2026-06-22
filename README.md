@@ -7,8 +7,8 @@ A non-WIMP cooking interface. Voice, gesture, and audio carry the entire cooking
 You arrive at the welcome screen, pick a language, and type your name once. New cooks are walked through a short gesture trainer before their first recipe; after that the app is gesture-first and voice-second:
 
 1. **Pick a mode.** Photo (upload images of ingredients) or hands-free (speak them).
-2. **The LLM identifies ingredients and proposes 2-3 recipes.** Gemma 4 31B (OpenRouter, free) or GPT-5.4 Nano (OpenAI) depending on your `.env`.
-3. **Browse recipes by swiping your hand.** The featured card sits in a tactile bezel; the other recipes cascade behind it. Thumbs up to start cooking, fist to go back.
+2. **The LLM identifies ingredients and proposes 2–3 recipes.** Gemma 4 31B (OpenRouter, free), GPT-5.4 Nano (OpenAI) or Grok depending on your `.env`.
+3. **Browse recipes by swiping your hand.** Featured card sits in a tactile bezel; previous and next recipes peek behind it. Thumbs up to start cooking, fist to go back.
 4. **Cook step by step.** Steps with embedded durations get an automatic countdown timer. Open palm to read the current step aloud. Swipe to advance.
 5. **Speak to navigate.** Say "next", "back", "repeat", or "pause". Say "save this" to keep a webcam frame of the dish. Say "kitchen mode" to enter the large-distance reading view.
 6. **Ask a question, hands-free.** Make a peace sign (or say "question") to open a short listening window, ask something like "can I use spaghetti instead?", and hear a bounded answer spoken back.
@@ -155,9 +155,9 @@ gestucook/
 ## Running it
 
 1. Clone the repo.
-2. Make sure your host has a MongoDB instance running on `:27017`. We do not spin up a Mongo container; we connect to yours.
-3. Copy `.env.example` to `.env`. Set `LLM_PROVIDER` and the matching API key (`OPENROUTER_API_KEY` or `OPENAI_API_KEY`). For Hindi, Italian, or Spanish sessions, set `AUDIO_PROVIDER=openai` — the local Piper and Whisper stack is English-only, so non-English audio is served by the OpenAI audio APIs and needs `OPENAI_API_KEY`.
-4. `docker compose up --build`. The first build of the local audio stack downloads the Whisper tiny model, the Piper voice, and the MediaPipe assets (~175 MB plus 8 MB).
+2. Make sure your host has a MongoDB container running on `:27017`. We do not spin up a Mongo container; we connect to yours.
+3. Copy `.env.example` to `.env` and fill in `OPENROUTER_API_KEY`, `OPENAI_API_KEY`, or `GROK_API_KEY` depending on `LLM_PROVIDER`.
+4. `docker compose up --build`. First build downloads the Whisper tiny model, the Piper voice, and the MediaPipe assets (~175 MB plus 8 MB).
 5. Open `http://localhost:3080`. Allow camera and microphone.
 
 If your host Mongo lives somewhere other than `host.docker.internal:27017`, set `MONGO_URL` in `.env` accordingly.

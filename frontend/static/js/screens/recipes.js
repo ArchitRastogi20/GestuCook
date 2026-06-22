@@ -2,17 +2,19 @@
 // Browse generated recipes. mount() starts the camera once; changing recipe
 // re-renders the page but REUSES the same <video>/<canvas>, so the webcam
 // stream is never interrupted. All input routes through the command arbiter.
-import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade, ScreenHeader, Toggle, highlightHudGesture } from "../ui/components.js";
+import { Bezel, Eyebrow, Chip, Button, PipFrame, Hud, Cascade, ScreenHeader, Toggle, highlightHudGesture, Snackbar, setLoading } from "../ui/components.js";
 import { state } from "../state.js";
 import { enter } from "../ui/motion.js";
 import { GestureEngine } from "../gestures.js";
-import { tts } from "../audio.js";
+import { tts, chime } from "../audio.js";
 import { commands } from "../commands.js";
 import { t } from "../i18n.js";
+import { api } from "../api.js";
 
 const GESTURE_ACTION = {
   swipe_right: "next", swipe_left: "back",
   thumbs_up: "cook", fist: "exit", victory: "pick",
+  open_palm: "read",
 };
 
 export async function mount(root) {
@@ -26,6 +28,8 @@ export async function mount(root) {
   canvasEl.width = 320; canvasEl.height = 240;
 
   let pickA = null, pickB = null;
+  let recipesSnackbar = null;
+  let snackbarOpen = false;
 
   function renderRecipe() {
     const i = state.recipe_index;
@@ -103,7 +107,22 @@ export async function mount(root) {
     // recipe -- "on the main page, while starting the cooking part".
     const navControls = document.createElement("div");
     navControls.style.cssText = "display:flex; align-items:center; gap: var(--space-4);";
+    const regen = document.createElement('button');
+    regen.className = 'btn btn--ghost'; regen.type = 'button'; regen.textContent = 'Regenerate';
+    regen.addEventListener('click', () => {
+      // gather current ingredients and open confirm modal
+      const allIngredients = [];
+      for (const rr of state.recipes) {
+        for (const it of (rr.ingredients || [])) {
+          const name = typeof it === 'string' ? it : (it.name || '');
+          if (name) allIngredients.push(name);
+        }
+      }
+      showRegenerateModal(allIngredients);
+    });
+
     navControls.append(
+      regen,
       Toggle({ label: t("common.voiceQA"), checked: state.voiceQA, onChange: (on) => state.setVoiceQA(on) }),
       Button({ label: t("common.home"), intent: "ghost", onClick: () => commands.dispatch("home", "button") }),
     );
@@ -116,7 +135,67 @@ export async function mount(root) {
     return hud;
   }
 
+  function showRegenerateModal(ingredients) {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.style.position = 'fixed'; overlay.style.left = '0'; overlay.style.top = '0';
+    overlay.style.width = '100%'; overlay.style.height = '100%'; overlay.style.display = 'flex';
+    overlay.style.alignItems = 'center'; overlay.style.justifyContent = 'center';
+    overlay.style.background = 'rgba(0,0,0,0.45)'; overlay.style.zIndex = '10000';
+
+    const card = document.createElement('div');
+    card.className = 'bezel';
+    card.style.padding = '18px'; card.style.maxWidth = '520px'; card.style.width = '90%';
+    card.style.backgroundColor = 'var(--bg, #fff)';
+    card.style.borderRadius = '12px';
+    card.style.boxShadow = '0 8px 32px rgba(0,0,0,0.18)';
+
+    const title = document.createElement('h3'); title.textContent = 'Do you want to regenerate the recipes?';
+    const p = document.createElement('p'); p.textContent = 'Existing recipes will be regenerated using the current ingredients. You can wait for the completion or cancel.';
+    const btns = document.createElement('div'); btns.style.display = 'flex'; btns.style.gap = '8px'; btns.style.marginTop = '12px';
+
+    const cancel = Button({ label: 'Cancel', intent: 'ghost', onClick: () => remove() });
+
+    const confirm = Button({
+      label: 'Regenerate',
+      onClick: async () => {
+        setLoading(confirm, true, 'Regenerating...');
+        try {
+          console.log('regen start', ingredients);
+          const res = await api.generateRecipes(ingredients, null, state.language);
+          console.log('regen res', res);
+          if (res?.recipes) {
+            state.setRecipes(res.recipes);
+            hud = renderRecipe();
+          }
+        } catch (e) {
+          console.error('regen error', e);
+          setLoading(confirm, false);
+        }
+        remove();
+      }
+    }); 
+    confirm.style.padding = '10px var(--space-4)';
+
+    btns.append(cancel, confirm);
+    card.append(title, p, btns);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    function remove() { try { overlay.remove(); } catch (e) {} }
+  }
+
   let hud = renderRecipe();
+
+  // Global snackbar for quick undo/confirm feedback
+  recipesSnackbar = Snackbar();
+
+  // Attach gesture feedback hook: audible chime + hud highlight
+  GestureEngine._onFire = (action) => {
+    try { chime(); } catch (e) {}
+    try { highlightHudGesture(hud, action); } catch (e) {}
+    setTimeout(() => { try { highlightHudGesture(hud, null); } catch (e) {} }, 600);
+  };
 
   function onAction(action) {
     const total = state.recipes.length;
@@ -154,13 +233,36 @@ export async function mount(root) {
         break;
       case "trainer": state.go("trainer"); break;
       case "home":    state.go("welcome"); break;
-      case "exit":    state.go("mode"); break;
+      case "exit":
+        if (snackbarOpen) return; 
+        snackbarOpen = true;
+        recipesSnackbar.show('Exit recipe view?', {
+          timeout: 0,
+          confirmText: 'Confirm',
+          onConfirm: () => { snackbarOpen = false; state.go('mode'); },
+          cancelText: 'Cancel',
+          onCancel: () => { snackbarOpen = false; recipesSnackbar.hide(); },
+        });
+        break;
     }
   }
   commands.bind(onAction);
 
   function onGesture(g) {
+    if (snackbarOpen) return;        // no navigation while a snackbar is open
     highlightHudGesture(hud, g);
+    // If user shows an open palm while browsing recipes, immediately read
+    // the recipe aloud. This bypasses the global command arbiter which can
+    // sometimes debounce or mis-route the action (e.g. accidental "back").
+    if (g === "open_palm") {
+      const r = state.recipes[state.recipe_index];
+      if (r) {
+        tts.stopAll();
+        tts.enqueue(`${r.name}. ${r.description || ""}`);
+      }
+      return;
+    }
+
     const action = GESTURE_ACTION[g];
     if (action) commands.dispatch(action, "gesture");
   }
@@ -174,4 +276,8 @@ export function unmount() {
   commands.unbind();
   GestureEngine.stop();
   tts.stopAll();
+  try {
+    if (recipesSnackbar && recipesSnackbar.el && recipesSnackbar.el.parentNode) recipesSnackbar.el.parentNode.removeChild(recipesSnackbar.el);
+  } catch (e) {}
+  try { GestureEngine._onFire = undefined; } catch (e) {}
 }
